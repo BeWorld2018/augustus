@@ -112,8 +112,10 @@ static const char *get_case_corrected_file(const char *dir, const char *filepath
     size_t dir_len = 0;
     size_t dir_skip = 0;
     if (!dir || !*dir) {
+#ifndef __MORPHOS__
         dir = ".";
         dir_skip = 2;
+#endif
     }
     dir_len = strlen(dir);
     strncpy(corrected_filename, dir, 2 * FILE_NAME_MAX - 1);

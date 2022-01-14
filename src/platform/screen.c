@@ -133,7 +133,7 @@ void platform_screen_get_scaled_params(int *width, int *height)
     }
 }
 
-#if !defined(_WIN32) && !defined(__APPLE__)
+#if !defined(_WIN32) && !defined(__APPLE__) && !defined(__MORPHOS__)
 static void set_window_icon(void)
 {
     SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(platform_icon_get_pixels(), 16, 16, 32, 16 * 4,
@@ -193,7 +193,7 @@ int platform_screen_create(const char *title, int display_scale_percentage)
         return 0;
     }
 
-#if !defined(_WIN32) && !defined (__APPLE__)
+#if !defined(_WIN32) && !defined (__APPLE__) && !defined (__MORPHOS__)
     // Windows and mac don't need setting a window icon. In fact the icon gets blurry if we do
     set_window_icon();
 #endif
@@ -218,7 +218,7 @@ int platform_screen_create(const char *title, int display_scale_percentage)
     city_texture.max_size.width = info.max_texture_width;
     city_texture.max_size.height = info.max_texture_height;
 
-#if !defined(__APPLE__)
+#if !defined(__APPLE__) && !defined(__MORPHOS__)
     if (fullscreen && SDL_GetNumVideoDisplays() > 1) {
         SDL_SetWindowGrab(SDL.window, SDL_TRUE);
     }

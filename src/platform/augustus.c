@@ -31,6 +31,10 @@
 #include "platform/switch/switch.h"
 #include "platform/vita/vita.h"
 
+#ifdef __MORPHOS__
+unsigned long __stack = 1000000;
+#endif
+
 #if defined(_WIN32)
 #include <string.h>
 #endif
@@ -60,7 +64,7 @@ static struct {
     int quit;
 } data = {1, 0};
 
-#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__ANDROID__)
+#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__ANDROID__) || defined(__MORPHOS__)
 /* Log to separate file on windows, since we don't have a console there */
 static FILE *log_file = 0;
 

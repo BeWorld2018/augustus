@@ -83,6 +83,10 @@ typedef const char *dir_name;
 #define CURRENT_DIR L"."
 #define set_dir_name(n) utf8_to_wchar(n)
 #define free_dir_name(n)
+#elif __MORPHOS__
+#define CURRENT_DIR "PROGDIR:"
+#define set_dir_name(n) (n)
+#define free_dir_name(n)
 #else
 #define CURRENT_DIR "."
 #define set_dir_name(n) (n)
@@ -115,6 +119,7 @@ static int is_file(int mode)
 #endif
 
 static const char *ASSET_DIRS[MAX_ASSET_DIRS] = {
+#ifndef __MORPHOS__
 #ifdef _WIN32
     "***SDL_BASE_PATH***",
 #endif
@@ -135,6 +140,7 @@ static const char *ASSET_DIRS[MAX_ASSET_DIRS] = {
     "/usr/share/augustus-game",
     "/usr/local/share/augustus-game",
     "/opt/augustus-game",
+#endif
 #endif
     CUSTOM_ASSETS_DIR
 };
@@ -198,7 +204,9 @@ static const dir_name get_assets_directory(void)
             strncpy(assets_directory, ASSET_DIRS[i], FILE_NAME_MAX - 1);
         }
         size_t offset = strlen(assets_directory);
+		#ifndef __MORPHOS__
         assets_directory[offset++] = '/';
+		#endif
         // Special case for romfs on switch
 #ifdef __SWITCH__
         if (strcmp(assets_directory, "romfs:/") != 0) {

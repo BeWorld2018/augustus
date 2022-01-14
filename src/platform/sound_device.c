@@ -17,8 +17,13 @@
 #include <psp2/io/fcntl.h>
 #endif
 
+#ifdef __MORPHOS__
+#define AUDIO_RATE 44100
+#define AUDIO_FORMAT AUDIO_S16SYS
+#else
 #define AUDIO_RATE 22050
 #define AUDIO_FORMAT AUDIO_S16
+#endif
 #define AUDIO_CHANNELS 2
 #define AUDIO_BUFFERS 1024
 
@@ -467,7 +472,11 @@ void sound_device_use_custom_music_player(int bitdepth, int num_channels, int ra
     if (bitdepth == 8) {
         format = AUDIO_U8;
     } else if (bitdepth == 16) {
+ #ifdef __MORPHOS__
+ 		format = AUDIO_S16SYS;
+ #else
         format = AUDIO_S16;
+ #endif
     } else {
         log_error("Custom music bitdepth not supported:", 0, bitdepth);
         return;
