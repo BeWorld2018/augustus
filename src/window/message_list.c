@@ -1,9 +1,11 @@
 #include "message_list.h"
 
+#include "campaign/campaign.h"
 #include "city/message.h"
 #include "core/calc.h"
 #include "core/image_group.h"
 #include "core/lang.h"
+#include "game/time.h"
 #include "graphics/generic_button.h"
 #include "graphics/graphics.h"
 #include "graphics/image.h"
@@ -14,9 +16,12 @@
 #include "graphics/text.h"
 #include "graphics/window.h"
 #include "input/input.h"
+#include "scenario/custom_messages.h"
+#include "scenario/property.h"
 #include "translation/translation.h"
 #include "window/city.h"
 #include "window/message_dialog.h"
+#include "window/mission_briefing.h"
 
 #define MAX_MESSAGES 10
 
@@ -25,6 +30,8 @@ static void button_close(int param1, int param2);
 static void button_message(int param1, int param2);
 static void button_delete(int param1, int param2);
 static void button_delete_all_read(int param1, int param2);
+static void button_delete_all_common(int param1, int param2);
+static void button_mission_briefing(int param1, int param2);
 static void on_scroll(void);
 
 static image_button image_button_help = {
@@ -32,6 +39,9 @@ static image_button image_button_help = {
 };
 static image_button image_button_close = {
     0, 0, 24, 24, IB_NORMAL, GROUP_CONTEXT_ICONS, 4, button_close, button_none, 0, 0, 1
+};
+static image_button show_briefing_button = {
+    0, 0, 33, 22, IB_NORMAL, GROUP_SIDEBAR_BRIEFING_ROTATE_BUTTONS, 0, button_mission_briefing, button_none, 0, 0, 1
 };
 static generic_button generic_buttons_messages[] = {
     {0, 0, 412, 18, button_message, button_delete, 0, 0},
@@ -50,14 +60,25 @@ static generic_button generic_button_delete_read[] = {
     { 0, 0, 20, 20, button_delete_all_read, button_none, 0, 0 }
 };
 
-static scrollbar_type scrollbar = { 432, 112, 208, on_scroll };
+static generic_button generic_button_delete_common[] = {
+    { 0, 0, 20, 20, button_delete_all_common, button_none, 0, 0 }
+};
 
+
+static scrollbar_type scrollbar = {432, 112, 208, 416, MAX_MESSAGES, on_scroll, 1};
 
 static void draw_delete_read_button(int x, int y, int focused)
 {
     uint8_t delete_read_text[] = { 'x', 0 };
     button_border_draw(x, y, 20, 20, focused ? 1 : 0);
     text_draw_centered(delete_read_text, x + 1, y + 4, 20, FONT_NORMAL_BLACK, 0);
+}
+
+static void draw_delete_common_button(int x, int y, int focused)
+{
+    uint8_t delete_common_text[] = { 'x', 0 };
+    button_border_draw(x, y, 20, 20, focused ? 1 : 0);
+    text_draw_centered(delete_common_text, x + 1, y + 4, 20, FONT_NORMAL_BLACK, 0);
 }
 
 
@@ -68,14 +89,29 @@ static struct {
     int y_text;
     int text_width_blocks;
     int text_height_blocks;
-
-    int focus_button_id;
+    unsigned int focus_button_id;
 } data;
+
+static int review_briefing_button_should_be_active(void)
+{
+    if (!scenario_is_custom()) {
+        return 1;
+    }
+    if (!scenario_intro_message()) {
+        return 0;
+    }
+    custom_message_t *custom_message = custom_messages_get(scenario_intro_message());
+    if (!custom_message) {
+        return 0;
+    }
+    return custom_messages_get_text(custom_message) ||
+        custom_messages_get_title(custom_message) || custom_messages_get_subtitle(custom_message);
+}
 
 static void init(void)
 {
     city_message_sort_and_compact();
-    scrollbar_init(&scrollbar, city_message_scroll_position(), city_message_count() - MAX_MESSAGES);
+    scrollbar_init(&scrollbar, city_message_scroll_position(), city_message_count());
 }
 
 static void draw_background(void)
@@ -94,6 +130,10 @@ static void draw_background(void)
     lang_text_draw_centered(63, 0, 0, 48, BLOCK_SIZE * data.width_blocks, FONT_LARGE_BLACK);
     inner_panel_draw(data.x_text, data.y_text, data.text_width_blocks, data.text_height_blocks);
 
+    if (review_briefing_button_should_be_active()) {
+        button_border_draw(data.x_text + data.text_width_blocks * BLOCK_SIZE - 39, data.y_text - 30, 39, 28, 0);
+    }
+
     if (city_message_count() > 0) {
         lang_text_draw(63, 2, data.x_text + 42, data.y_text - 12, FONT_SMALL_PLAIN);
         lang_text_draw(63, 3, data.x_text + 180, data.y_text - 12, FONT_SMALL_PLAIN);
@@ -108,23 +148,26 @@ static void draw_background(void)
     graphics_reset_dialog();
 }
 
-static void draw_messages(int total_messages)
+static void draw_messages(unsigned int total_messages)
 {
-    int max = total_messages < MAX_MESSAGES ? total_messages : MAX_MESSAGES;
-    int index = scrollbar.scroll_position;
-    for (int i = 0; i < max; i++, index++) {
+    unsigned int max = total_messages < MAX_MESSAGES ? total_messages : MAX_MESSAGES;
+    unsigned int index = scrollbar.scroll_position;
+    for (unsigned int i = 0; i < max; i++, index++) {
         const city_message *msg = city_message_get(index);
-        const lang_message *lang_msg = lang_get_message(city_message_get_text_id(msg->message_type));
         int image_offset = 0;
-        if (lang_msg->message_type == MESSAGE_TYPE_DISASTER) {
-            image_offset = 2;
+        const lang_message *lang_msg = 0;
+        if (msg->message_type != MESSAGE_CUSTOM_MESSAGE) {
+            lang_msg = lang_get_message(city_message_get_text_id(msg->message_type));
+            if (lang_msg->message_type == MESSAGE_TYPE_DISASTER) {
+                image_offset = 2;
+            }
         }
         if (msg->is_read) {
             image_draw(image_group(GROUP_MESSAGE_ICON) + 15 + image_offset,
-                data.x_text + 12, data.y_text + 6 + 20 * i);
+                data.x_text + 12, data.y_text + 6 + 20 * i, COLOR_MASK_NONE, SCALE_NONE);
         } else {
             image_draw(image_group(GROUP_MESSAGE_ICON) + 14 + image_offset,
-                data.x_text + 12, data.y_text + 6 + 20 * i);
+                data.x_text + 12, data.y_text + 6 + 20 * i, COLOR_MASK_NONE, SCALE_NONE);
         }
         font_t font = FONT_NORMAL_WHITE;
         if (data.focus_button_id == i + 1) {
@@ -133,12 +176,20 @@ static void draw_messages(int total_messages)
         int width = lang_text_draw(25, msg->month, data.x_text + 42, data.y_text + 8 + 20 * i, font);
         lang_text_draw_year(msg->year,
             data.x_text + 42 + width, data.y_text + 8 + 20 * i, font);
-        text_draw(
-            lang_msg->title.text,
-            data.x_text + 180, data.y_text + 8 + 20 * i, font, 0);
+        if (msg->message_type != MESSAGE_CUSTOM_MESSAGE && lang_msg) {
+            text_draw(
+                lang_msg->title.text,
+                data.x_text + 180, data.y_text + 8 + 20 * i, font, 0);
+        } else {
+            custom_message_t *custom_msg = custom_messages_get(msg->param1);
+            if (custom_msg->title) {
+                text_draw(custom_msg->title->text, data.x_text + 180, data.y_text + 8 + 20 * i, font, 0);
+            } else {
+                text_draw(translation_for(TR_ACTION_TYPE_A_MESSAGE), data.x_text + 180, data.y_text + 8 + 20 * i, font, 0);
+            }
+        }
     }
     scrollbar_draw(&scrollbar);
-
 }
 
 static void draw_foreground(void)
@@ -146,8 +197,15 @@ static void draw_foreground(void)
     graphics_in_dialog();
 
     image_buttons_draw(16, 32 + BLOCK_SIZE * data.height_blocks - 42, &image_button_help, 1);
-    image_buttons_draw(BLOCK_SIZE * data.width_blocks - 38, 32 + BLOCK_SIZE * data.height_blocks - 36, &image_button_close, 1);
-    draw_delete_read_button(BLOCK_SIZE * data.width_blocks - 58, 32 + BLOCK_SIZE * data.height_blocks - 36, data.focus_button_id == 14);
+    image_buttons_draw(BLOCK_SIZE * data.width_blocks - 38, 32 + BLOCK_SIZE * data.height_blocks - 36,
+        &image_button_close, 1);
+    if (review_briefing_button_should_be_active()) {
+        image_buttons_draw(data.x_text + data.text_width_blocks * BLOCK_SIZE - 36, data.y_text - 27, &show_briefing_button, 1);
+    }
+    draw_delete_read_button(BLOCK_SIZE * data.width_blocks - 58, 32 + BLOCK_SIZE * data.height_blocks - 36,
+        data.focus_button_id == 14);
+    draw_delete_common_button(45, 32 + BLOCK_SIZE * data.height_blocks - 36,
+        data.focus_button_id == 16);
 
     int total_messages = city_message_count();
     if (total_messages > 0) {
@@ -160,10 +218,15 @@ static void draw_foreground(void)
 static void handle_input(const mouse *m, const hotkeys *h)
 {
     const mouse *m_dialog = mouse_in_dialog(m);
-    int old_button_id = data.focus_button_id;
+    unsigned int old_button_id = data.focus_button_id;
     data.focus_button_id = 0;
 
-    int button_id;
+    if (scrollbar_handle_mouse(&scrollbar, m_dialog, 1)) {
+        data.focus_button_id = 13;
+        return;
+    }
+
+    unsigned int button_id;
     int handled = image_buttons_handle_mouse(m_dialog, 16, 32 + BLOCK_SIZE * data.height_blocks - 42,
         &image_button_help, 1, &button_id);
     if (button_id) {
@@ -174,13 +237,23 @@ static void handle_input(const mouse *m, const hotkeys *h)
     if (button_id) {
         data.focus_button_id = 12;
     }
-    if (scrollbar_handle_mouse(&scrollbar, m_dialog)) {
-        data.focus_button_id = 13;
-    }
-    handled |= generic_buttons_handle_mouse(m_dialog, 16 * data.width_blocks - 58, 32 + 16 * data.height_blocks - 36,
-        generic_button_delete_read, 1, &button_id);
+    handled |= generic_buttons_handle_mouse(m_dialog, BLOCK_SIZE * data.width_blocks - 58,
+        32 + BLOCK_SIZE * data.height_blocks - 36, generic_button_delete_read, 1, &button_id);
     if (button_id) {
         data.focus_button_id = 14;
+    }
+
+    if (review_briefing_button_should_be_active()) {
+        handled |= image_buttons_handle_mouse(m_dialog, data.x_text + data.text_width_blocks * BLOCK_SIZE - 36,
+            data.y_text - 27, &show_briefing_button, 1, &button_id);
+        if (button_id) {
+            data.focus_button_id = 15;
+        }
+    }
+    handled |= generic_buttons_handle_mouse(m_dialog, 45,
+    32 + BLOCK_SIZE * data.height_blocks - 36, generic_button_delete_common, 1, &button_id);
+    if (button_id) {
+        data.focus_button_id = 16;
     }
 
     handled |= generic_buttons_handle_mouse(m_dialog, data.x_text, data.y_text + 4,
@@ -218,11 +291,15 @@ static void button_message(int param1, int param2)
     if (id < city_message_count()) {
         const city_message *msg = city_message_get(id);
         city_message_mark_read(id);
-        window_message_dialog_show_city_message(
-            city_message_get_text_id(msg->message_type),
-            msg->year, msg->month, msg->param1, msg->param2,
-            city_message_get_advisor(msg->message_type),
-            0);
+        if (msg->message_type != MESSAGE_CUSTOM_MESSAGE) {
+            window_message_dialog_show_city_message(
+                city_message_get_text_id(msg->message_type),
+                msg->year, msg->month, msg->param1, msg->param2,
+                city_message_get_advisor(msg->message_type),
+                0);
+        } else {
+            window_message_dialog_show_custom_message(msg->param1, msg->year, msg->month);
+        }
     }
 }
 
@@ -231,9 +308,23 @@ static void button_delete(int id_to_delete, int param2)
     int id = city_message_set_current(scrollbar.scroll_position + id_to_delete);
     if (id < city_message_count()) {
         city_message_delete(id);
-        scrollbar_update_max(&scrollbar, city_message_count() - MAX_MESSAGES);
+        scrollbar_update_total_elements(&scrollbar, city_message_count());
         window_invalidate();
     }
+}
+
+static void button_delete_all_common(int param1, int param2)
+{
+    for (int id = 0; id < city_message_count();) {
+        const city_message *msg = city_message_get(id);
+        if (msg->message_type != MESSAGE_CUSTOM_MESSAGE) {
+            city_message_delete(id);
+        } else {
+            id++;
+        }
+    }
+    scrollbar_update_total_elements(&scrollbar, city_message_count());
+    window_invalidate();
 }
 
 static void button_delete_all_read(int param1, int param2)
@@ -246,9 +337,15 @@ static void button_delete_all_read(int param1, int param2)
                 id++;
             }
     }
-    scrollbar_update_max(&scrollbar, city_message_count() - MAX_MESSAGES);
+    scrollbar_update_total_elements(&scrollbar, city_message_count());
     window_invalidate();
+}
 
+static void button_mission_briefing(int param1, int param2)
+{
+    if (!scenario_is_custom() || scenario_intro_message()) {
+        window_mission_briefing_show_review();
+    }
 }
 
 static void get_tooltip(tooltip_context *c)
@@ -259,6 +356,11 @@ static void get_tooltip(tooltip_context *c)
         c->text_id = 2;
     } else if (data.focus_button_id == 14) {
         c->translation_key = TR_TOOLTIP_BUTTON_DELETE_READ_MESSAGES;
+    } else if (data.focus_button_id == 15) {
+        c->text_group = 68;
+        c->text_id = 42;
+    } else if (data.focus_button_id == 16) {
+        c->translation_key = TR_TOOLTIP_BUTTON_DELETE_COMMON_MESSAGES;
     } else {
         return;
     }

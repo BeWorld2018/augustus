@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 // apply plugin: 'com.github.triplet.play'
 
-task getVersion {
+tasks.register('getVersion') {
     def cmakeFile = rootProject.file("../CMakeLists.txt").text
     def versionMajor = (cmakeFile =~ /set\(PROJECT_VERSION_MAJOR (\d+)\)/)[0][1].toInteger()
     def versionMinor = (cmakeFile =~ /set\(PROJECT_VERSION_MINOR (\d+)\)/)[0][1].toInteger()
@@ -65,22 +65,21 @@ task getVersion {
 }
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "30.0.3"
-    ndkVersion "22.1.7171670"
+    ndkVersion "26.3.11579264"
 
     defaultConfig {
+        compileSdk 34
         applicationId "com.github.Keriew.augustus"
         minSdkVersion 21
-        targetSdkVersion 30
+        targetSdkVersion 34
 
         versionName getVersion.versionName
         versionCode getVersion.versionCode
 
         externalNativeBuild {
             cmake {
-                version "3.18.1"
-                arguments "-DTARGET_PLATFORM=android", "-DSYSTEM_LIBS=OFF"
+                version "3.22.1"
+                arguments "-DTARGET_PLATFORM=android", "-DANDROID_STL=none"
             }
         }
         ndk {
@@ -88,8 +87,17 @@ android {
         }
         sourceSets {
             main.res.srcDirs += '../../res/android'
-            main.assets.srcDirs += '../../assets'
+            if (file('../../res/packed_assets').exists()) {
+                println 'Using packed assets'
+                main.assets.srcDirs += '../../res/packed_assets'
+            } else {
+                println 'Packed assets not found. Using regular assets'
+                main.assets.srcDirs += '../../res/assets'
+            }
         }
+    }
+    buildFeatures {
+        prefab true
     }
     signingConfigs {
         release {
@@ -103,22 +111,35 @@ android {
         }
     }
     buildTypes {
+        rootProject.ext.usingAAR = false
         debug {
             ext.alwaysUpdateBuildId = false
             applicationIdSuffix ".debug"
+            externalNativeBuild.cmake.arguments += "-DDRAW_FPS=1"
+            if (file('libs/SDL2-debug.aar').exists()) {
+                println 'Using pre-packed SDL2 Debug AAR'
+                rootProject.ext.usingAAR = true
+                dependencies.debugImplementation files('libs/SDL2-debug.aar')
+            }
         }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            if (file('libs/SDL2-release.aar').exists()) {
+                println 'Using pre-packed SDL2 Release AAR'
+                rootProject.ext.usingAAR = true
+                dependencies.releaseImplementation files('libs/SDL2-release.aar')
+            }
         }
     }
     externalNativeBuild {
         cmake {
-            version "3.18.1"
+            version "3.22.1"
             path "../../CMakeLists.txt"
         }
     }
+    namespace 'com.github.Keriew.augustus'
 }
 
 /** play {
@@ -131,6 +152,15 @@ repositories {
 }
 
 dependencies {
-    implementation project(':SDL2')
-    implementation 'androidx.appcompat:appcompat:1.3.1'
+    if (!rootProject.ext.usingAAR) {
+        if (file('libs/SDL2.aar').exists()) {
+            println 'Using pre-packed SDL2 General AAR'
+            implementation files('libs/SDL2.aar')
+            rootProject.ext.usingAAR = true
+        } else {
+            println 'Pre-packed SDL2 AAR not found - building it'
+            implementation project(':SDL2')
+        }
+    }
+    implementation 'androidx.appcompat:appcompat:1.6.1'
 }

@@ -20,6 +20,16 @@ struct { \
 }
 
 /**
+ * Clears an array
+ * @param a The array structure
+ */
+#define array_clear(a) \
+( \
+    array_free((void **)(a).items, (a).blocks), \
+    memset(&(a), 0, sizeof(a)) \
+)
+
+/**
  * Initiates an array
  * @param a The array structure
  * @param size The size of each block of items
@@ -30,13 +40,12 @@ struct { \
  * @param in_use_callback A function to check if the current position has a valid item. Can be null.
  *        If null, it is assumed that every item in the array is valid.
  *        The function should have the following signature:
- *        int(<item> *). <item> is the current array item. Should return 1 if the item is being used.
+ *        int(const <item> *). <item> is the current array item. Should return 1 if the item is being used.
  * @return Whether memory was properly allocated.
  */
 #define array_init(a, size, new_item_callback, in_use_callback) \
 ( \
-    array_free((void **)(a).items, (a).blocks), \
-    memset(&(a), 0, sizeof(a)), \
+    array_clear(a), \
     (a).constructor = new_item_callback, \
     (a).in_use = in_use_callback, \
     (a).block_offset = array_next_power_of_two(size) - 1, \
@@ -47,7 +56,7 @@ struct { \
 /**
  * Creates a new item for the array, either by finding an available empty item or by expanding the array.
  * @param a The array structure
- * @param index The index upon which to start searching for a free slot. If index is greater than the arrray size,
+ * @param index The index upon which to start searching for a free slot. If index is greater than the array size,
  *        the array will be expanded.
  * @param ptr A pointer that will get the new item. Will be null if there was a memory allocation error.
  */
@@ -62,12 +71,12 @@ struct { \
         } \
     } \
     if (!error && (a).in_use) { \
-        for (int i = index; i < (a).size; i++) { \
-            if (!(a).in_use(array_item(a, i))) { \
-                ptr = array_item(a, i); \
+        for (int array_index = index; array_index < (a).size; array_index++) { \
+            if (!(a).in_use(array_item(a, array_index))) { \
+                ptr = array_item(a, array_index); \
                 memset(ptr, 0, sizeof(**(a).items)); \
                 if ((a).constructor) { \
-                    (a).constructor(ptr, i); \
+                    (a).constructor(ptr, array_index); \
                 } \
                 break; \
             } \
@@ -75,6 +84,25 @@ struct { \
     } \
     if (!error && !ptr) { \
         ptr = array_advance(a); \
+    } \
+}
+
+/**
+ * Removes an item from an array, moving the other items left and calling their constructors if applicable
+ * @param a The array structure
+ * @param index The array index to remove
+ */
+#define array_remove_item(a, index) \
+{ \
+    for (int array_index = index; array_index + 1 < (a).size; array_index++) { \
+        memcpy(array_item(a, array_index), array_item(a, array_index + 1), sizeof(**(a).items)); \
+        if ((a).constructor && (!(a).in_use || (a).in_use(array_item(a, array_index)))) { \
+            (a).constructor(array_item(a, array_index), array_index); \
+        } \
+    } \
+    if (index < (a).size) { \
+        memset(array_item(a, (a).size - 1), 0, sizeof(**(a).items)); \
+        (a).size--; \
     } \
 }
 
@@ -121,9 +149,10 @@ struct { \
  * Iterates through an array
  * @param a The array structure
  * @param item A pointer to the array item that will be used to traverse the structure
+ * @note You can use the array_index parameter to retrieve the index of the current item
  */
 #define array_foreach(a, item) \
-    for(int i = 0; i < (a).size && ((item) = array_item(a, i)); i++)
+    for(int array_index = 0; array_index < (a).size && ((item) = array_item(a, array_index)) != 0; array_index++)
 
 /**
  * Trims an array, removing its latest items that aren't being used until the first one is used.
@@ -159,7 +188,7 @@ struct { \
 #define array_next(a) \
 ( \
     memset(array_item(a, (a).size), 0, sizeof(**(a).items)), \
-    (a).constructor ? (a).constructor(array_item(a, (a).size), (a).size) : 0, \
+    (a).constructor ? (a).constructor(array_item(a, (a).size), (a).size) : (void) 0, \
     (a).size++, \
     array_item(a, (a).size - 1) \
 )

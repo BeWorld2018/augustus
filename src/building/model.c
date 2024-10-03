@@ -99,6 +99,13 @@ static void override_model_data(void)
     buildings[BUILDING_LARGE_TEMPLE_VENUS].desirability_step = 2;
     buildings[BUILDING_LARGE_TEMPLE_VENUS].desirability_step_size = -2;
     buildings[BUILDING_LARGE_TEMPLE_VENUS].desirability_range = 5;
+
+    buildings[BUILDING_WELL].laborers = 0;
+    buildings[BUILDING_GATEHOUSE].laborers = 0;
+    buildings[BUILDING_FORT_JAVELIN].laborers = 0;
+    buildings[BUILDING_FORT_LEGIONARIES].laborers = 0;
+    buildings[BUILDING_FORT_MOUNTED].laborers = 0;
+    buildings[BUILDING_FORT].laborers = 0;
 }
 
 int model_load(void)
@@ -185,7 +192,7 @@ int model_load(void)
     return 1;
 }
 
-const model_building MODEL_ROADBLOCK = { 40,0,0,0,0 };
+const model_building MODEL_ROADBLOCK = { 12,0,0,0,0 };
 const model_building MODEL_WORK_CAMP = { 150,-10,2,3,4,20 };
 const model_building MODEL_ARCHITECT_GUILD = { 200,-8,1,2,4,12 };
 const model_building MODEL_GRAND_TEMPLE_CERES = { 2500,20,2,-4,5,50 };
@@ -194,7 +201,7 @@ const model_building MODEL_GRAND_TEMPLE_MERCURY = { 2500,20,2,-4,5,50 };
 const model_building MODEL_GRAND_TEMPLE_MARS = { 2500,20,2,-4,5,50 };
 const model_building MODEL_GRAND_TEMPLE_VENUS = { 2500,20,2,-4,5,50 };
 const model_building MODEL_PANTHEON = { 3500,20,2,-4,5,50 };
-const model_building MODEL_LIGHTHOUSE = { 1250,6,1,-1,4,20 };
+const model_building MODEL_LIGHTHOUSE = { 1000,6,1,-1,4,20 };
 const model_building MODEL_MESS_HALL = { 100,-8,1,2,4,10 };
 const model_building MODEL_TAVERN = { 40,-2,1,1,6,8 };
 const model_building MODEL_GRAND_GARDEN = { 400,0,0,0,0,0 };
@@ -202,18 +209,32 @@ const model_building MODEL_ARENA = { 500,-3,1,1,3,25 };
 const model_building MODEL_COLOSSEUM = { 1500,-3,1,1,3,100 };
 const model_building MODEL_HIPPODROME = { 3500,-3,1,1,3,150 };
 const model_building MODEL_NULL = { 0,0,0,0,0 };
-const model_building MODEL_LARARIUM = { 30, 4, 1, -1, 3, 0 };
-const model_building MODEL_NYMPHAEUM = { 500,12,2,-1,6,0 };
-const model_building MODEL_SMALL_MAUSOLEUM = { 500,-8,1,3,5,0 };
-const model_building MODEL_LARGE_MAUSOLEUM = { 1500,-10,1,3,6,0 };
+const model_building MODEL_LARARIUM = { 45, 4, 1, -1, 3, 0 };
+const model_building MODEL_NYMPHAEUM = { 400,12,2,-1,6,0 };
+const model_building MODEL_SMALL_MAUSOLEUM = { 250,-8,1,3,5,0 };
+const model_building MODEL_LARGE_MAUSOLEUM = { 500,-10,1,3,6,0 };
 const model_building MODEL_WATCHTOWER = { 100,-6,1,2,3,8, };
 const model_building MODEL_CARAVANSERAI = { 500,-10,2,3,4,20 };
 const model_building MODEL_PALISADE = { 6,0,0,0,0,0 };
+const model_building MODEL_HIGHWAY = { 100,-4,1,2,3,0 };
+const model_building MODEL_GOLD_MINE = { 100,-6,1,1,4,30 };
+const model_building MODEL_STONE_QUARRY = { 60,-6,1,1,4,10 };
+const model_building MODEL_SAND_PIT = { 40,-6,1,1,4,10 };
+const model_building MODEL_BRICKWORKS = { 80,-3,1,1,4,10 };
+const model_building MODEL_CONCRETE_MAKER = { 60,-3,1,1,4,10 };
+const model_building MODEL_CITY_MINT = { 250,-3,1,1,3,40 };
+const model_building MODEL_DEPOT = { 100,-3,1,1,2,15 };
+const model_building MODEL_ARMOURY = { 50,-5,1,1,4,6 };
 
 const model_building *model_get_building(building_type type)
 {
     switch (type) {
         case BUILDING_ROADBLOCK:
+        case BUILDING_ROOFED_GARDEN_WALL_GATE:
+        case BUILDING_LOOPED_GARDEN_GATE:
+        case BUILDING_PANELLED_GARDEN_GATE:
+        case BUILDING_HEDGE_GATE_DARK:
+        case BUILDING_HEDGE_GATE_LIGHT:
             return &MODEL_ROADBLOCK;
         case BUILDING_WORKCAMP:
             return &MODEL_WORK_CAMP;
@@ -246,6 +267,11 @@ const model_building *model_get_building(building_type type)
         case BUILDING_HIPPODROME:
             return &MODEL_HIPPODROME;
         case BUILDING_LARARIUM:
+        case BUILDING_SHRINE_CERES:
+        case BUILDING_SHRINE_MARS:
+        case BUILDING_SHRINE_MERCURY:
+        case BUILDING_SHRINE_NEPTUNE:
+        case BUILDING_SHRINE_VENUS:
             return &MODEL_LARARIUM;
         case BUILDING_NYMPHAEUM:
             return &MODEL_NYMPHAEUM;
@@ -258,30 +284,55 @@ const model_building *model_get_building(building_type type)
         case BUILDING_CARAVANSERAI:
             return &MODEL_CARAVANSERAI;
         case BUILDING_PALISADE:
+        case BUILDING_PALISADE_GATE:
             return &MODEL_PALISADE;
+        case BUILDING_HIGHWAY:
+            return &MODEL_HIGHWAY;
+        case BUILDING_GOLD_MINE:
+            return &MODEL_GOLD_MINE;
+        case BUILDING_STONE_QUARRY:
+            return &MODEL_STONE_QUARRY;
+        case BUILDING_SAND_PIT:
+            return &MODEL_SAND_PIT;
+        case BUILDING_BRICKWORKS:
+            return &MODEL_BRICKWORKS;
+        case BUILDING_CONCRETE_MAKER:
+            return &MODEL_CONCRETE_MAKER;
+        case BUILDING_CITY_MINT:
+            return &MODEL_CITY_MINT;
+        case BUILDING_DEPOT:
+            return &MODEL_DEPOT;
+        case BUILDING_OVERGROWN_GARDENS:
+            return &buildings[BUILDING_GARDENS];
+        case BUILDING_ARMOURY:
+            return &MODEL_ARMOURY;
         default:
             break;
     }
 
     if ((type >= BUILDING_PINE_TREE && type <= BUILDING_SMALL_STATUE_ALT_B) ||
         type == BUILDING_HEDGE_DARK || type == BUILDING_HEDGE_LIGHT ||
-        type == BUILDING_DECORATIVE_COLUMN || type == BUILDING_GARDEN_WALL ||
-        type == BUILDING_COLONNADE || type == BUILDING_GARDEN_WALL || 
+        type == BUILDING_DECORATIVE_COLUMN || type == BUILDING_LOOPED_GARDEN_WALL ||
+        type == BUILDING_COLONNADE || type == BUILDING_LOOPED_GARDEN_WALL || 
         type == BUILDING_ROOFED_GARDEN_WALL || type == BUILDING_GARDEN_PATH ||
-        type == BUILDING_GARDEN_WALL_GATE) {
-        return &buildings[41];
+        type == BUILDING_PANELLED_GARDEN_WALL || type == BUILDING_GLADIATOR_STATUE) {
+        return &buildings[BUILDING_SMALL_STATUE];
     }
 
     if (type == BUILDING_SMALL_POND || type == BUILDING_OBELISK ||
         type == BUILDING_LEGION_STATUE || type == BUILDING_DOLPHIN_FOUNTAIN) {
-        return &buildings[42];
+        return &buildings[BUILDING_MEDIUM_STATUE];
     }
 
     if (type == BUILDING_LARGE_POND || type == BUILDING_HORSE_STATUE) {
-        return &buildings[43];
+        return &buildings[BUILDING_LARGE_STATUE];
     }
 
-    if (type > 129 || type < 0) {
+    if (type == BUILDING_FORT_AUXILIA_INFANTRY || type == BUILDING_FORT_ARCHERS) {
+        return &buildings[BUILDING_FORT_LEGIONARIES];
+    }
+
+    if (type > 129) {
         return &MODEL_NULL;
     } else {
         return &buildings[type];
@@ -293,17 +344,17 @@ const model_house *model_get_house(house_level level)
     return &houses[level];
 }
 
-int model_house_uses_inventory(house_level level, inventory_type inventory)
+int model_house_uses_inventory(house_level level, resource_type inventory)
 {
     const model_house *house = model_get_house(level);
     switch (inventory) {
-        case INVENTORY_WINE:
+        case RESOURCE_WINE:
             return house->wine;
-        case INVENTORY_OIL:
+        case RESOURCE_OIL:
             return house->oil;
-        case INVENTORY_FURNITURE:
+        case RESOURCE_FURNITURE:
             return house->furniture;
-        case INVENTORY_POTTERY:
+        case RESOURCE_POTTERY:
             return house->pottery;
         default:
             return 0;

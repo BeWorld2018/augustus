@@ -6,6 +6,8 @@
 #include "core/random.h"
 #include "map/ring.h"
 #include "map/building.h"
+#include "map/tiles.h"
+#include "map/water_supply.h"
 
 static struct {
     int paused;
@@ -29,6 +31,11 @@ void game_state_init(void)
 int game_state_is_paused(void)
 {
     return data.paused;
+}
+
+void game_state_pause(void)
+{
+    data.paused = 1;
 }
 
 void game_state_unpause(void)
@@ -57,16 +64,19 @@ void game_state_toggle_overlay(void)
     int tmp = data.previous_overlay;
     data.previous_overlay = data.current_overlay;
     data.current_overlay = tmp;
-    map_clear_highlights();
 }
 
 void game_state_set_overlay(int overlay)
 {
-    if (overlay == OVERLAY_NONE) {
-        data.previous_overlay = data.current_overlay;
-    } else {
-        data.previous_overlay = OVERLAY_NONE;
+    // Prevent toggling the storages overlay
+    if (overlay != OVERLAY_STORAGES) {
+        if (overlay == OVERLAY_NONE) {
+            if (data.current_overlay != OVERLAY_NONE && data.current_overlay != OVERLAY_STORAGES) {
+                data.previous_overlay = data.current_overlay;
+            }
+        } else {
+            data.previous_overlay = OVERLAY_NONE;
+        }
     }
     data.current_overlay = overlay;
-    map_clear_highlights();
 }

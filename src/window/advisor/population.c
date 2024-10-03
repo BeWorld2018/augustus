@@ -1,6 +1,10 @@
 #include "population.h"
 
+#include "building/count.h"
 #include "core/config.h"
+#include "core/lang.h"
+#include "core/locale.h"
+#include "core/string.h"
 #include "city/finance.h"
 #include "city/migration.h"
 #include "city/population.h"
@@ -26,7 +30,7 @@ static generic_button graph_buttons[] = {
     { 509, 161, 104, 55, button_graph, button_none, 1, 0 }
 };
 
-static int focus_button_id;
+static unsigned int focus_button_id;
 
 static void get_y_axis(int max_value, int *y_max, int *y_shift)
 {
@@ -50,14 +54,22 @@ static void get_min_max_month_year(int max_months, int *start_month, int *start_
         if (*end_month < 0) {
             *end_year -= 1;
         }
-        *start_month = 11 - (max_months % 12);
-        *start_year = *end_year - max_months / 12;
+        *start_month = 11 - (max_months % GAME_TIME_MONTHS_PER_YEAR);
+        *start_year = *end_year - max_months / GAME_TIME_MONTHS_PER_YEAR;
     } else {
         *start_month = 0;
         *start_year = scenario_property_start_year();
-        *end_month = (max_months + *start_month) % 12;
-        *end_year = (max_months + *start_month) / 12 + *start_year;
+        *end_month = (max_months + *start_month) % GAME_TIME_MONTHS_PER_YEAR;
+        *end_year = (max_months + *start_month) / GAME_TIME_MONTHS_PER_YEAR + *start_year;
     }
+}
+
+static void get_current_month_year_from_months(int month, int max_months, int *current_month, int *current_year)
+{
+    int start_month, start_year, end_month, end_year;
+    get_min_max_month_year(max_months, &start_month, &start_year, &end_month, &end_year);
+    *current_month = (start_month + month) % GAME_TIME_MONTHS_PER_YEAR;
+    *current_year = start_year + month / GAME_TIME_MONTHS_PER_YEAR + (start_month + (month % GAME_TIME_MONTHS_PER_YEAR) > 11 ? 1 : 0);
 }
 
 static void draw_history_graph(int full_size, int x, int y)
@@ -106,9 +118,7 @@ static void draw_history_graph(int full_size, int x, int y)
 
         width = lang_text_draw(25, end_month, x + 380, y + 210, FONT_SMALL_PLAIN);
         lang_text_draw_year(end_year, x + width + 380, y + 210, FONT_SMALL_PLAIN);
-    }
 
-    if (full_size) {
         graphics_set_clip_rectangle(0, 0, 640, y + 200);
         for (int m = 0; m < max_months; m++) {
             int pop = city_population_at_month(max_months, m);
@@ -121,19 +131,23 @@ static void draw_history_graph(int full_size, int x, int y)
             if (val > 0) {
                 switch (max_months) {
                     case 20:
-                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR), x + 20 * m, y + 200 - val);
+                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR), x + 20 * m, y + 200 - val,
+                            COLOR_MASK_NONE, SCALE_NONE);
                         break;
                     case 40:
-                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 1, x + 10 * m, y + 200 - val);
+                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 1, x + 10 * m, y + 200 - val,
+                            COLOR_MASK_NONE, SCALE_NONE);
                         break;
                     case 100:
-                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 2, x + 4 * m, y + 200 - val);
+                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 2, x + 4 * m, y + 200 - val,
+                            COLOR_MASK_NONE, SCALE_NONE);
                         break;
                     case 200:
-                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 3, x + 2 * m, y + 200 - val);
+                        image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 3, x + 2 * m, y + 200 - val,
+                            COLOR_MASK_NONE, SCALE_NONE);
                         break;
                     default:
-                        graphics_draw_vertical_line(x + m, y + 200 - val, y + 199, COLOR_RED);
+                        graphics_draw_line(x + m, x + m, y + 200 - val, y + 199, COLOR_RED);
                         break;
                 }
             }
@@ -147,7 +161,7 @@ static void draw_history_graph(int full_size, int x, int y)
                 if (max_months == 20) {
                     graphics_fill_rect(x + m, y + 50 - val, 4, val + 1, COLOR_RED);
                 } else {
-                    graphics_draw_vertical_line(x + m, y + 50 - val, y + 50, COLOR_RED);
+                    graphics_draw_line(x + m, x + m, y + 50 - val, y + 50, COLOR_RED);
                 }
             }
         }
@@ -174,9 +188,7 @@ static void draw_census_graph(int full_size, int x, int y)
         for (int i = 0; i <= 10; i++) {
             text_draw_number_centered(i * 10, x + 40 * i - 22, y + 210, 40, FONT_SMALL_PLAIN);
         }
-    }
 
-    if (full_size) {
         graphics_set_clip_rectangle(0, 0, 640, y + 200);
         for (int i = 0; i < 100; i++) {
             int pop = city_population_at_age(i);
@@ -187,7 +199,8 @@ static void draw_census_graph(int full_size, int x, int y)
                 val = pop >> y_shift;
             }
             if (val > 0) {
-                image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 2, x + 4 * i, y + 200 - val);
+                image_draw(image_group(GROUP_POPULATION_GRAPH_BAR) + 2, x + 4 * i, y + 200 - val,
+                    COLOR_MASK_NONE, SCALE_NONE);
             }
         }
         graphics_reset_clip_rectangle();
@@ -196,7 +209,7 @@ static void draw_census_graph(int full_size, int x, int y)
         for (int i = 0; i < 100; i++) {
             int val = city_population_at_age(i) >> y_shift;
             if (val > 0) {
-                graphics_draw_vertical_line(x + i, y + 50 - val, y + 50, COLOR_RED);
+                graphics_draw_line(x + i, x + i, y + 50 - val, y + 50, COLOR_RED);
             }
         }
     }
@@ -221,9 +234,7 @@ static void draw_society_graph(int full_size, int x, int y)
         // x axis
         lang_text_draw_centered(55, 9, x - 80, y + 210, 200, FONT_SMALL_PLAIN);
         lang_text_draw_centered(55, 10, x + 280, y + 210, 200, FONT_SMALL_PLAIN);
-    }
 
-    if (full_size) {
         graphics_set_clip_rectangle(0, 0, 640, y + 200);
         for (int i = 0; i < 20; i++) {
             int pop = city_population_at_level(i);
@@ -234,7 +245,8 @@ static void draw_society_graph(int full_size, int x, int y)
                 val = pop >> y_shift;
             }
             if (val > 0) {
-                image_draw(image_group(GROUP_POPULATION_GRAPH_BAR), x + 20 * i, y + 200 - val);
+                image_draw(image_group(GROUP_POPULATION_GRAPH_BAR), x + 20 * i, y + 200 - val,
+                    COLOR_MASK_NONE, SCALE_NONE);
             }
         }
         graphics_reset_clip_rectangle();
@@ -249,21 +261,31 @@ static void draw_society_graph(int full_size, int x, int y)
     }
 }
 
+static int calculate_total_housing_buildings(void)
+{
+    int total_houses = 0;
+    for (building_type house = BUILDING_HOUSE_SMALL_TENT; house <= BUILDING_HOUSE_LUXURY_PALACE; house++) {
+        total_houses += building_count_active(house);
+    }
+    return total_houses;
+}
+
 static void print_society_info(void)
 {
     int width;
     int avg_tax_per_house = 0;
-    if (calculate_total_housing_buildings() > 0) {
-        avg_tax_per_house = city_finance_estimated_tax_income() / calculate_total_housing_buildings();
+    int total_houses = calculate_total_housing_buildings();
+    if (total_houses) {
+        avg_tax_per_house = city_finance_estimated_tax_income() / total_houses;
     }
 
     // Percent patricians
     width = text_draw(translation_for(TR_ADVISOR_PERCENTAGE_IN_VILLAS_PALACES), 75, 342, FONT_NORMAL_WHITE, 0);
-    text_draw_percentage(percentage_city_population_in_villas_palaces(), 75 + width, 342, FONT_NORMAL_WHITE);
+    text_draw_percentage(city_population_percentage_in_villas_palaces(), 75 + width, 342, FONT_NORMAL_WHITE);
 
     // Percent impoverished
     width = text_draw(translation_for(TR_ADVISOR_PERCENTAGE_IN_TENTS_SHACKS), 75, 360, FONT_NORMAL_WHITE, 0);
-    text_draw_percentage(percentage_city_population_in_tents_shacks(), 75 + width, 360, FONT_NORMAL_WHITE);
+    text_draw_percentage(city_population_percentage_in_tents_shacks(), 75 + width, 360, FONT_NORMAL_WHITE);
 
     // Average tax
     width = text_draw(translation_for(TR_ADVISOR_AVERAGE_TAX), 75, 378, FONT_NORMAL_WHITE, 0);
@@ -356,7 +378,7 @@ static int draw_background(void)
     int width;
 
     outer_panel_draw(0, 0, 40, ADVISOR_HEIGHT);
-    image_draw(image_group(GROUP_ADVISOR_ICONS) + 5, 10, 10);
+    image_draw(image_group(GROUP_ADVISOR_ICONS) + 5, 10, 10, COLOR_MASK_NONE, SCALE_NONE);
 
     int graph_order = city_population_graph_order();
     // Title: depends on big graph shown
@@ -368,16 +390,20 @@ static int draw_background(void)
         lang_text_draw(55, 2, 60, 12, FONT_LARGE_BLACK);
     }
 
-    image_draw(image_group(GROUP_PANEL_WINDOWS) + 14, 62, 60);
+    image_draw(image_group(GROUP_PANEL_WINDOWS) + 14, 62, 60, COLOR_MASK_NONE, SCALE_NONE);
 
-    width = text_draw_number(city_population(), '@', " ", 450, 25, FONT_NORMAL_BLACK, 0);
-    text_draw(translation_for(TR_ADVISOR_TOTAL_POPULATION), 450 + width, 25, FONT_NORMAL_BLACK, 0);
+    int x_offset = text_get_number_width(city_population(), 0, "", FONT_NORMAL_BLACK);
+    x_offset += lang_text_get_width(CUSTOM_TRANSLATION, TR_ADVISOR_TOTAL_POPULATION, FONT_NORMAL_BLACK);
+    x_offset = 620 - x_offset;
+
+    width = text_draw_number(city_population(), 0, "", x_offset, 25, FONT_NORMAL_BLACK, 0);
+    text_draw(translation_for(TR_ADVISOR_TOTAL_POPULATION), x_offset + width, 25, FONT_NORMAL_BLACK, 0);
 
     int big_text, top_text, bot_text;
     void (*big_graph)(int, int, int);
     void (*top_graph)(int, int, int);
     void (*bot_graph)(int, int, int);
-    void (*info_panel)();
+    void (*info_panel)(void);
 
     switch (graph_order) {
         default:
@@ -448,11 +474,11 @@ static int draw_background(void)
     // info panel
     inner_panel_draw(48, 336, 34, 5);
     int image_id = image_group(GROUP_BULLET);
-    image_draw(image_id, 56, 344);
-    image_draw(image_id, 56, 362);
-    image_draw(image_id, 56, 380);
+    image_draw(image_id, 56, 344, COLOR_MASK_NONE, SCALE_NONE);
+    image_draw(image_id, 56, 362, COLOR_MASK_NONE, SCALE_NONE);
+    image_draw(image_id, 56, 380, COLOR_MASK_NONE, SCALE_NONE);
     if (graph_order < 4) {
-        image_draw(image_id, 56, 398);
+        image_draw(image_id, 56, 398, COLOR_MASK_NONE, SCALE_NONE);
     }
 
     info_panel();
@@ -476,7 +502,7 @@ static void draw_foreground(void)
 
 static int handle_mouse(const mouse *m)
 {
-    return generic_buttons_handle_mouse(m, 0, 0, graph_buttons, 3, &focus_button_id);
+    return generic_buttons_handle_mouse(m, 0, 0, graph_buttons, 2, &focus_button_id);
 }
 
 static void button_graph(int param1, int param2)
@@ -509,10 +535,145 @@ static void button_graph(int param1, int param2)
     window_invalidate();
 }
 
+static uint8_t *get_graph_tooltip(int x, int y)
+{
+    static uint8_t tooltip_text[300];
+    int graph_type = city_population_graph_order() / 2;
+
+    if (graph_type == 0) {
+        int max_months;
+        int width;
+        int month_count = city_population_monthly_count();
+        if (month_count <= 20) {
+            max_months = 20;
+            width = 20;
+        } else if (month_count <= 40) {
+            max_months = 40;
+            width = 10;
+        } else if (month_count <= 100) {
+            max_months = 100;
+            width = 4;
+        } else if (month_count <= 200) {
+            max_months = 200;
+            width = 2;
+        } else {
+            max_months = 400;
+            width = 1;
+        }
+        int max_value = 0;
+        for (int m = 0; m < max_months; m++) {
+            int value = city_population_at_month(max_months, m);
+            if (value > max_value) {
+                max_value = value;
+            }
+        }
+        int y_max, y_shift;
+        get_y_axis(max_value, &y_max, &y_shift);
+
+        int m = x / width;
+
+        int pop = city_population_at_month(max_months, m);
+        int val;
+        if (y_shift == -1) {
+            val = 2 * pop;
+        } else {
+            val = (pop >> y_shift);
+        }
+        if (val && y >= 200 - val) {
+            int current_month, current_year;
+            get_current_month_year_from_months(m, max_months, &current_month, &current_year);
+            uint8_t *offset = string_copy(lang_get_string(25, current_month), tooltip_text, 300);
+            offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+            if (current_year >= 0) {
+                int use_year_ad = locale_year_before_ad();
+                if (use_year_ad) {
+                    offset += string_from_int(offset, current_year, 0);
+                    offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+                    offset = string_copy(lang_get_string(20, 1), offset, (int) (offset - tooltip_text));
+                } else {
+                    offset = string_copy(lang_get_string(20, 1), offset, (int) (offset - tooltip_text));
+                    offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+                    offset += string_from_int(offset, current_year, 0);
+                }
+            } else {
+                offset += string_from_int(offset, -current_year, 0);
+                offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+                offset = string_copy(lang_get_string(20, 0), offset, (int) (offset - tooltip_text));
+            }
+
+            offset = string_copy(string_from_ascii(": "), offset, 300 - (int) (offset - tooltip_text));
+            offset += string_from_int(offset, pop, 0);
+            offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+            offset = string_copy(lang_get_string(CUSTOM_TRANSLATION, TR_ADVISOR_POPULATION_RESIDENTS), offset, 300 - (int) (offset - tooltip_text));
+            return tooltip_text;
+        }
+    } else if (graph_type == 1) {
+        int max_value = 0;
+        for (int i = 0; i < 100; i++) {
+            int value = city_population_at_age(i);
+            if (value > max_value) {
+                max_value = value;
+            }
+        }
+        int y_max, y_shift;
+        get_y_axis(max_value, &y_max, &y_shift);
+        int m = x / 4;
+        int pop = city_population_at_age(m);
+        int val;
+        if (y_shift == -1) {
+            val = 2 * pop;
+        } else {
+            val = pop >> y_shift;
+        }
+        if (val && y >= 200 - val) {
+            uint8_t *offset = string_copy(lang_get_string(CUSTOM_TRANSLATION, TR_ADVISOR_POPULATION_AGE), tooltip_text, 300);
+            offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+            offset += string_from_int(offset, m, 0);
+            offset = string_copy(string_from_ascii(": "), offset, 300 - (int) (offset - tooltip_text));
+            offset += string_from_int(offset, pop, 0);
+            offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+            offset = string_copy(lang_get_string(CUSTOM_TRANSLATION, TR_ADVISOR_POPULATION_RESIDENTS), offset, 300 - (int) (offset - tooltip_text));
+            return tooltip_text;
+        }
+    } else if (graph_type == 2) {
+        int max_value = 0;
+        for (int i = 0; i < 20; i++) {
+            int value = city_population_at_level(i);
+            if (value > max_value) {
+                max_value = value;
+            }
+        }
+        int y_max, y_shift;
+        get_y_axis(max_value, &y_max, &y_shift);
+        int m = x / 20;
+        int pop = city_population_at_level(m);
+        int val;
+        if (y_shift == -1) {
+            val = 2 * pop;
+        } else {
+            val = pop >> y_shift;
+        }
+        if (val && y >= 200 - val) {
+            uint8_t *offset = string_copy(lang_get_string(29, m), tooltip_text, 300);
+            offset = string_copy(string_from_ascii(" "), offset, 300 - (int) (offset - tooltip_text));
+            offset = string_copy(lang_get_string(CUSTOM_TRANSLATION, TR_ADVISOR_POPULATION_DWELLERS), offset, 300 - (int) (offset - tooltip_text));
+            offset = string_copy(string_from_ascii(": "), offset, 300 - (int) (offset - tooltip_text));
+            offset += string_from_int(offset, pop, 0);
+            return tooltip_text;
+        }
+    }
+    return 0;
+}
+
 static void get_tooltip_text(advisor_tooltip_result *r)
 {
     if (focus_button_id && focus_button_id < 3) {
         r->text_id = 111;
+        return;
+    }
+    const mouse *m = mouse_in_dialog(mouse_get());
+    if (m->x >= 70 && m->y >= 64 && m->x < 470 && m->y < 264) {
+        r->precomposed_text = get_graph_tooltip(m->x - 70, m->y - 64);
     }
 }
 

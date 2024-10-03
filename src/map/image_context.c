@@ -352,7 +352,12 @@ const terrain_image *map_image_context_get_elevation(int grid_offset, int elevat
 {
     int tiles[MAX_TILES];
     for (int i = 0; i < MAX_TILES; i++) {
-        tiles[i] = map_elevation_at(grid_offset + map_grid_direction_delta(i)) >= elevation ? 1 : 0;
+        int target_offset = grid_offset + map_grid_direction_delta(i);
+        if (map_terrain_get(target_offset) == TERRAIN_MAP_EDGE) {
+            tiles[i] = 1;
+        } else {
+            tiles[i] = map_elevation_at(grid_offset + map_grid_direction_delta(i)) >= elevation ? 1 : 0;
+        }
     }
     return get_image(CONTEXT_ELEVATION, tiles);
 }
@@ -363,7 +368,7 @@ const terrain_image *map_image_context_get_earthquake(int grid_offset)
     for (int i = 0; i < MAX_TILES; i++) {
         int offset = grid_offset + map_grid_direction_delta(i);
         tiles[i] = (map_terrain_is(offset, TERRAIN_ROCK) &&
-            map_property_is_plaza_or_earthquake(grid_offset)) ? 1 : 0;
+            map_property_is_plaza_earthquake_or_overgrown_garden(grid_offset)) ? 1 : 0;
     }
     return get_image(CONTEXT_EARTHQUAKE, tiles);
 }
@@ -400,7 +405,7 @@ const terrain_image *map_image_context_get_wall_gatehouse(int grid_offset)
 
 static void set_tiles_road(int grid_offset, int tiles[MAX_TILES])
 {
-    fill_matches(grid_offset, TERRAIN_ROAD, 1, 0, tiles);
+    fill_matches(grid_offset, TERRAIN_ROAD | TERRAIN_HIGHWAY, 1, 0, tiles);
     for (int i = 0; i < MAX_TILES; i += 2) {
         int offset = grid_offset + map_grid_direction_delta(i);
         if (map_terrain_is(offset, TERRAIN_GATEHOUSE)) {
@@ -425,7 +430,7 @@ static void set_tiles_road(int grid_offset, int tiles[MAX_TILES])
                 tiles[i] |= (offset == b->grid_offset + map_grid_delta(6, 3)) ? 1 : 0;
                 tiles[i] |= (offset == b->grid_offset + map_grid_delta(3, 6)) ? 1 : 0;
             }
-            if (b->type == BUILDING_LIGHTHOUSE || b->type == BUILDING_LARGE_MAUSOLEUM || (b->type >= BUILDING_LARGE_TEMPLE_CERES && b->type <= BUILDING_LARGE_TEMPLE_VENUS)) {
+            if (b->type == BUILDING_LIGHTHOUSE || b->type == BUILDING_LARGE_MAUSOLEUM || b->type == BUILDING_NYMPHAEUM || b->type == BUILDING_CITY_MINT || (b->type >= BUILDING_LARGE_TEMPLE_CERES && b->type <= BUILDING_LARGE_TEMPLE_VENUS)) {
                 tiles[i] = (offset == b->grid_offset + map_grid_delta(0, 1)) ? 1 : 0;
                 tiles[i] |= (offset == b->grid_offset + map_grid_delta(1, 0)) ? 1 : 0;
                 tiles[i] |= (offset == b->grid_offset + map_grid_delta(1, 2)) ? 1 : 0;

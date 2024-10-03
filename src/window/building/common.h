@@ -27,7 +27,8 @@ typedef enum {
     TERRAIN_INFO_GARDEN = 12,
     TERRAIN_INFO_PLAZA = 13,
     TERRAIN_INFO_ENTRY_FLAG = 14,
-    TERRAIN_INFO_EXIT_FLAG = 15
+    TERRAIN_INFO_EXIT_FLAG = 15,
+    TERRAIN_INFO_HIGHWAY = 16,
 } terrain_info_type;
 
 typedef struct {
@@ -45,13 +46,13 @@ typedef struct {
     int formation_id;
     int formation_types;
     int barracks_soldiers_requested;
-    int worst_desirability_building_id;
+    int worst_desirability_building_type;
     int warehouse_space_text;
     building_info_type type;
     terrain_info_type terrain_type;
-    int can_go_to_advisor;
+    int advisor_button;
     int rubble_building_type;
-    int storage_show_special_orders;
+    int show_special_orders;
     struct {
         int sound_id;
         int phrase_id;
@@ -60,6 +61,16 @@ typedef struct {
         int drawn;
         int figure_ids[7];
     } figure;
+    struct {
+        int resource;
+        int source;
+        int destination;
+    } depot_selection;
+    struct {
+        int active;
+        int x_offset;
+        int y_offset;
+    } risk_icons;
 } building_info_context;
 
 void window_building_set_possible_position(int * x_offset, int * y_offset, int width_blocks, int height_blocks);
@@ -74,14 +85,15 @@ void window_building_draw_employment_without_house_cover(building_info_context *
 
 void window_building_draw_description(building_info_context *c, int text_group, int text_id);
 
-void window_building_draw_description_from_tr_string(building_info_context* c, int translation_key);
-
-void window_building_draw_description_from_tr_string_at(building_info_context *c, int translation_key, int y_offset);
-
 void window_building_draw_description_at(building_info_context *c, int y_offset, int text_group, int text_id);
 
 void window_building_play_sound(building_info_context *c, const char *sound_file);
 
 void window_building_draw_monument_construction_process(building_info_context *c,
-                                                        int tr_phase_name, int tr_phase_name_text, int tr_construction_desc);
+    int tr_phase_name, int tr_phase_name_text, int tr_construction_desc);
+
+void window_building_draw_risks(building_info_context *c, int x_offset, int y_offset);
+
+void window_building_get_risks_tooltip(const building_info_context *c, int *group_id, int *text_id);
+
 #endif // WINDOW_BUILDING_COMMON_H

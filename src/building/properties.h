@@ -12,7 +12,7 @@ typedef struct {
 } building_properties;
 
 typedef struct {
-    int type;
+    building_type type;
     building_properties properties;
     const char* asset_name;
     const char* asset_image_id;
@@ -20,6 +20,6 @@ typedef struct {
 
 const building_properties *building_properties_for_type(building_type type);
 
-void init_augustus_building_properties();
+void init_augustus_building_properties(void);
 
 #endif // BUILDING_PROPERTIES_H

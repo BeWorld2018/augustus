@@ -10,6 +10,9 @@
  * One month has 16 days.
  * One day has 50 ticks.
  */
+#define GAME_TIME_TICKS_PER_DAY 50
+#define GAME_TIME_DAYS_PER_MONTH 16
+#define GAME_TIME_MONTHS_PER_YEAR 12
 
 /**
  * Initializes game time to the given year with all other fields zero
@@ -75,5 +78,7 @@ void game_time_save_state(buffer *buf);
  * @param buf Buffer
  */
 void game_time_load_state(buffer *buf);
+
+void game_time_load_basic_info(buffer *buf, int *month, int *year);
 
 #endif // GAME_TIME_H

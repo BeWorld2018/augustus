@@ -22,6 +22,9 @@ static void button_amount(int param1, int param2);
 static void button_resource(int param1, int param2);
 static void button_deadline_years(int param1, int param2);
 static void button_favor(int param1, int param2);
+static void button_extension_months(int param1, int param2);
+static void button_extension_disfavor(int param1, int param2);
+static void button_ignored_disfavor(int param1, int param2);
 static void button_delete(int param1, int param2);
 static void button_save(int param1, int param2);
 
@@ -31,14 +34,18 @@ static generic_button buttons[] = {
     {430, 152, 100, 25, button_resource, button_none},
     {70, 190, 140, 25, button_deadline_years, button_none},
     {400, 190, 80, 25, button_favor, button_none},
-    {10, 234, 250, 25, button_delete, button_none},
-    {300, 234, 100, 25, button_save, button_none}
+    {400, 230, 80, 25, button_extension_months, button_none},
+    {400, 270, 80, 25, button_extension_disfavor, button_none},
+    {400, 310, 80, 25, button_ignored_disfavor, button_none},
+    {10, 350, 250, 25, button_delete, button_none},
+    {300, 350, 100, 25, button_save, button_none}
 };
 
 static struct {
     int id;
     editor_request request;
-    int focus_button_id;
+    unsigned int focus_button_id;
+    resource_type avaialble_resources[RESOURCE_MAX];
 } data;
 
 static void init(int id)
@@ -56,7 +63,7 @@ static void draw_foreground(void)
 {
     graphics_in_dialog();
 
-    outer_panel_draw(0, 100, 38, 11);
+    outer_panel_draw(0, 100, 38, 20);
     lang_text_draw(44, 21, 14, 114, FONT_LARGE_BLACK);
 
     button_border_draw(30, 152, 60, 25, data.focus_button_id == 1);
@@ -68,7 +75,7 @@ static void draw_foreground(void)
     text_draw_number_centered(data.request.amount, 330, 158, 80, FONT_NORMAL_BLACK);
 
     button_border_draw(430, 152, 100, 25, data.focus_button_id == 3);
-    lang_text_draw_centered(23, data.request.resource, 430, 158, 100, FONT_NORMAL_BLACK);
+    text_draw_centered(resource_get_data(data.request.resource)->text, 430, 158, 100, FONT_NORMAL_BLACK, COLOR_MASK_NONE);
 
     lang_text_draw(44, 24, 40, 196, FONT_NORMAL_BLACK);
     button_border_draw(70, 190, 140, 25, data.focus_button_id == 4);
@@ -78,18 +85,30 @@ static void draw_foreground(void)
     button_border_draw(400, 190, 80, 25, data.focus_button_id == 5);
     text_draw_number_centered_prefix(data.request.favor, '+', 400, 196, 80, FONT_NORMAL_BLACK);
 
-    button_border_draw(300, 234, 100, 25, data.focus_button_id == 7);
-    lang_text_draw_centered(18, 3, 300, 240, 100, FONT_NORMAL_BLACK);
+    lang_text_draw(CUSTOM_TRANSLATION, TR_EDITOR_FAVOUR_EXTENSION_MONTHS, 70, 236, FONT_NORMAL_BLACK);
+    button_border_draw(400, 230, 80, 25, data.focus_button_id == 6);
+    text_draw_number_centered_prefix(data.request.extension_months_to_comply, '+', 400, 236, 80, FONT_NORMAL_BLACK);
 
-    button_border_draw(10, 234, 250, 25, data.focus_button_id == 6);
-    lang_text_draw_centered(44, 25, 10, 240, 250, FONT_NORMAL_BLACK);
+    lang_text_draw(CUSTOM_TRANSLATION, TR_EDITOR_FAVOUR_DISFAVOR, 70, 276, FONT_NORMAL_BLACK);
+    button_border_draw(400, 270, 80, 25, data.focus_button_id == 7);
+    text_draw_number_centered_prefix(data.request.extension_disfavor, '-', 400, 276, 80, FONT_NORMAL_BLACK);
+
+    lang_text_draw(CUSTOM_TRANSLATION, TR_EDITOR_FAVOUR_IGNORED, 70, 316, FONT_NORMAL_BLACK);
+    button_border_draw(400, 310, 80, 25, data.focus_button_id == 8);
+    text_draw_number_centered_prefix(data.request.ignored_disfavor, '-', 400, 316, 80, FONT_NORMAL_BLACK);
+
+    button_border_draw(300, 350, 100, 25, data.focus_button_id == 10);
+    lang_text_draw_centered(18, 3, 300, 356, 100, FONT_NORMAL_BLACK);
+
+    button_border_draw(10, 350, 250, 25, data.focus_button_id == 9);
+    lang_text_draw_centered(44, 25, 10, 356, 250, FONT_NORMAL_BLACK);
 
     graphics_reset_dialog();
 }
 
 static void handle_input(const mouse *m, const hotkeys *h)
 {
-    if (generic_buttons_handle_mouse(mouse_in_dialog(m), 0, 0, buttons, 7, &data.focus_button_id)) {
+    if (generic_buttons_handle_mouse(mouse_in_dialog(m), 0, 0, buttons, 10, &data.focus_button_id)) {
         return;
     }
     if (input_go_back_requested(m, h)) {
@@ -128,7 +147,7 @@ static void button_amount(int param1, int param2)
 
 static void set_resource(int value)
 {
-    data.request.resource = value;
+    data.request.resource = data.avaialble_resources[value];
     if (data.request.amount > 999) {
         data.request.amount = 999;
     }
@@ -136,7 +155,20 @@ static void set_resource(int value)
 
 static void button_resource(int param1, int param2)
 {
-    window_select_list_show(screen_dialog_offset_x() + 210, screen_dialog_offset_y() + 40, 23, 17, set_resource);
+    static const uint8_t *resource_texts[RESOURCE_MAX + RESOURCE_TOTAL_SPECIAL];
+    static int total_resources = 0;
+    if (!total_resources) {
+        for (resource_type resource = RESOURCE_NONE; resource < RESOURCE_MAX + RESOURCE_TOTAL_SPECIAL; resource++) {
+            if (!resource_is_storable(resource) && resource < RESOURCE_MAX) {
+                continue;
+            }
+            resource_texts[total_resources] = resource_get_data(resource)->text;
+            data.avaialble_resources[total_resources] = resource;
+            total_resources++;
+        }
+    }
+    window_select_list_show_text(screen_dialog_offset_x() + 210, screen_dialog_offset_y() + 40,
+        resource_texts, total_resources, set_resource);
 }
 
 static void set_deadline_years(int value)
@@ -158,6 +190,36 @@ static void set_favor(int value)
 static void button_favor(int param1, int param2)
 {
     window_numeric_input_show(screen_dialog_offset_x() + 260, screen_dialog_offset_y() + 100, 3, 100, set_favor);
+}
+
+static void set_extension_months(int value)
+{
+    data.request.extension_months_to_comply = value;
+}
+
+static void button_extension_months(int param1, int param2)
+{
+    window_numeric_input_show(screen_dialog_offset_x() + 260, screen_dialog_offset_y() + 100, 3, 120, set_extension_months);
+}
+
+static void set_extension_disfavor(int value)
+{
+    data.request.extension_disfavor = value;
+}
+
+static void button_extension_disfavor(int param1, int param2)
+{
+    window_numeric_input_show(screen_dialog_offset_x() + 260, screen_dialog_offset_y() + 100, 3, 100, set_extension_disfavor);
+}
+
+static void set_ignored_disfavor(int value)
+{
+    data.request.ignored_disfavor = value;
+}
+
+static void button_ignored_disfavor(int param1, int param2)
+{
+    window_numeric_input_show(screen_dialog_offset_x() + 260, screen_dialog_offset_y() + 100, 3, 100, set_ignored_disfavor);
 }
 
 static void button_delete(int param1, int param2)

@@ -14,26 +14,29 @@ static struct {
     dir_listing listing;
     int max_files;
     char *cased_filename;
+    char current_dir[FILE_NAME_MAX];
 } data;
 
 static void allocate_listing_files(int min, int max)
 {
     for (int i = min; i < max; i++) {
-        data.listing.files[i] = malloc(FILE_NAME_MAX * sizeof(char));
-        data.listing.files[i][0] = 0;
+        data.listing.files[i].name = malloc(FILE_NAME_MAX * sizeof(char));
+        data.listing.files[i].name[0] = 0;
     }
 }
 
 static void clear_dir_listing(void)
 {
     data.listing.num_files = 0;
+    data.current_dir[0] = 0;
     if (data.max_files <= 0) {
-        data.listing.files = (char **) malloc(BASE_MAX_FILES * sizeof(char *));
+        data.listing.files = (dir_entry *) malloc(BASE_MAX_FILES * sizeof(dir_entry));
         allocate_listing_files(0, BASE_MAX_FILES);
         data.max_files = BASE_MAX_FILES;
     } else {
         for (int i = 0; i < data.max_files; i++) {
-            data.listing.files[i][0] = 0;
+            data.listing.files[i].name[0] = 0;
+            data.listing.files[i].modified_time = 0;
         }
     }
 }
@@ -43,23 +46,25 @@ static void expand_dir_listing(void)
     int old_max_files = data.max_files;
 
     data.max_files = 2 * old_max_files;
-    data.listing.files = (char **) realloc(data.listing.files, data.max_files * sizeof(char *));
+    data.listing.files = (dir_entry *) realloc(data.listing.files, data.max_files * sizeof(dir_entry));
     allocate_listing_files(old_max_files, data.max_files);
 }
 
 static int compare_lower(const void *va, const void *vb)
 {
-    // arguments are pointers to char*
-    return platform_file_manager_compare_filename(*(const char **) va, *(const char **) vb);
+    const dir_entry *a = (const dir_entry *) va;
+    const dir_entry *b = (const dir_entry *) vb;
+
+    return platform_file_manager_compare_filename(a->name, b->name);
 }
 
-static int add_to_listing(const char *filename)
+static int add_to_listing(const char *filename, long modified_time)
 {
     if (data.listing.num_files >= data.max_files) {
         expand_dir_listing();
     }
-    strncpy(data.listing.files[data.listing.num_files], filename, FILE_NAME_MAX);
-    data.listing.files[data.listing.num_files][FILE_NAME_MAX - 1] = 0;
+    snprintf(data.listing.files[data.listing.num_files].name, FILE_NAME_MAX, "%s", filename);
+    data.listing.files[data.listing.num_files].modified_time = modified_time;
     ++data.listing.num_files;
     return LIST_CONTINUE;
 }
@@ -67,22 +72,35 @@ static int add_to_listing(const char *filename)
 const dir_listing *dir_find_files_with_extension(const char *dir, const char *extension)
 {
     clear_dir_listing();
+    snprintf(data.current_dir, FILE_NAME_MAX, "%s", dir);
     platform_file_manager_list_directory_contents(dir, TYPE_FILE, extension, add_to_listing);
-    qsort(data.listing.files, data.listing.num_files, sizeof(char *), compare_lower);
+    qsort(data.listing.files, data.listing.num_files, sizeof(dir_entry), compare_lower);
     return &data.listing;
 }
 
-const dir_listing *dir_find_all_subdirectories(void)
+const dir_listing *dir_find_files_with_extension_at_location(int location, const char *extension)
+{
+    return dir_find_files_with_extension(platform_file_manager_get_directory_for_location(location, 0), extension);
+}
+
+const dir_listing *dir_find_all_subdirectories(const char *dir)
 {
     clear_dir_listing();
-    platform_file_manager_list_directory_contents(0, TYPE_DIR, 0, add_to_listing);
-    qsort(data.listing.files, data.listing.num_files, sizeof(char *), compare_lower);
+    snprintf(data.current_dir, FILE_NAME_MAX, "%s", dir);
+    platform_file_manager_list_directory_contents(dir, TYPE_DIR, 0, add_to_listing);
+    qsort(data.listing.files, data.listing.num_files, sizeof(dir_entry), compare_lower);
     return &data.listing;
 }
 
-static int compare_case(const char *filename)
+const dir_listing *dir_find_all_subdirectories_at_location(int location)
+{
+    return dir_find_all_subdirectories(platform_file_manager_get_directory_for_location(location, 0));
+}
+
+static int compare_case(const char *filename, long unused)
 {
     if (platform_file_manager_compare_filename(filename, data.cased_filename) == 0) {
+        // We are copying anyway because the comparison is case insensitive, so we can't use the original filename
         strcpy(data.cased_filename, filename);
         return LIST_MATCH;
     }
@@ -107,7 +125,6 @@ static void move_left(char *str)
 static const char *get_case_corrected_file(const char *dir, const char *filepath)
 {
     static char corrected_filename[2 * FILE_NAME_MAX];
-    corrected_filename[2 * FILE_NAME_MAX - 1] = 0;
 
     size_t dir_len = 0;
     size_t dir_skip = 0;
@@ -118,7 +135,7 @@ static const char *get_case_corrected_file(const char *dir, const char *filepath
 #endif
     }
     dir_len = strlen(dir);
-    strncpy(corrected_filename, dir, 2 * FILE_NAME_MAX - 1);
+    snprintf(corrected_filename, 2 * FILE_NAME_MAX, "%s", dir);
     if (dir_len) {
         if (dir[dir_len - 1] != '/') {
             corrected_filename[dir_len] = '/';
@@ -126,7 +143,7 @@ static const char *get_case_corrected_file(const char *dir, const char *filepath
         }
     }
 
-    strncpy(&corrected_filename[dir_len], filepath, 2 * FILE_NAME_MAX - dir_len - 1);
+    snprintf(&corrected_filename[dir_len], 2 * FILE_NAME_MAX - dir_len, "%s", filepath);
 
     FILE *fp = file_open(corrected_filename, "rb");
     if (fp) {
@@ -170,8 +187,8 @@ static const char *get_case_corrected_file(const char *dir, const char *filepath
 
 const dir_listing *dir_append_files_with_extension(const char *extension)
 {
-    platform_file_manager_list_directory_contents(0, TYPE_FILE, extension, add_to_listing);
-    qsort(data.listing.files, data.listing.num_files, sizeof(char *), compare_lower);
+    platform_file_manager_list_directory_contents(data.current_dir, TYPE_FILE, extension, add_to_listing);
+    qsort(data.listing.files, data.listing.num_files, sizeof(dir_entry), compare_lower);
     return &data.listing;
 }
 
@@ -192,7 +209,15 @@ const char *dir_get_file(const char *filepath, int localizable)
     return get_case_corrected_file(0, filepath);
 }
 
-const char *dir_get_asset(const char *asset_path, const char *filepath)
+const char *dir_get_file_at_location(const char *filename, int location)
 {
-    return get_case_corrected_file(asset_path, filepath);
+    return get_case_corrected_file(platform_file_manager_get_directory_for_location(location, 0), filename);
+}
+
+const char *dir_append_location(const char *filename, int location)
+{
+    static char corrected_filename[FILE_NAME_MAX];
+    snprintf(corrected_filename, FILE_NAME_MAX, "%s%s",
+        platform_file_manager_get_directory_for_location(location, 0), filename);
+    return corrected_filename;
 }

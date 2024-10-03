@@ -17,7 +17,7 @@
 #include "map/terrain.h"
 #include "map/tiles.h"
 
-void map_building_tiles_add(int building_id, int x, int y, int size, int image_id, int terrain)
+void map_building_tiles_add_remove(int building_id, int x, int y, int size, int image_id, int terrain_to_add, int terrain_to_remove)
 {
     if (!map_grid_is_inside(x, y, size)) {
         return;
@@ -44,8 +44,8 @@ void map_building_tiles_add(int building_id, int x, int y, int size, int image_i
     for (int dy = 0; dy < size; dy++) {
         for (int dx = 0; dx < size; dx++) {
             int grid_offset = map_grid_offset(x + dx, y + dy);
-            map_terrain_remove(grid_offset, TERRAIN_CLEARABLE);
-            map_terrain_add(grid_offset, terrain);
+            map_terrain_remove(grid_offset, terrain_to_remove);
+            map_terrain_add(grid_offset, terrain_to_add);
             map_building_set(grid_offset, building_id);
             map_property_clear_constructing(grid_offset);
             map_property_set_multi_tile_size(grid_offset, size);
@@ -54,6 +54,11 @@ void map_building_tiles_add(int building_id, int x, int y, int size, int image_i
                 dx == x_leftmost && dy == y_leftmost);
         }
     }
+}
+
+void map_building_tiles_add(int building_id, int x, int y, int size, int image_id, int terrain)
+{
+    map_building_tiles_add_remove(building_id, x, y, size, image_id, terrain, TERRAIN_CLEARABLE);
 }
 
 static void set_crop_tile(int building_id, int x, int y, int dx, int dy, int crop_image_id, int growth)
@@ -107,7 +112,7 @@ void map_building_tiles_add_farm(int building_id, int x, int y, int crop_image_i
                 dx == x_leftmost && dy == y_leftmost);
         }
     }
-    int growth = progress / 10;
+    int growth = progress / 5;
     int growth_per_tile = growth / 5;
     int growth_remaining = growth % 5;
 
@@ -177,7 +182,7 @@ void map_building_tiles_remove(int building_id, int x, int y)
             map_property_set_multi_tile_size(grid_offset, 1);
             map_property_clear_multi_tile_xy(grid_offset);
             map_property_mark_draw_tile(grid_offset);
-            map_aqueduct_set(grid_offset, 0);
+            map_aqueduct_remove(grid_offset);
             map_building_set(grid_offset, 0);
             map_building_damage_clear(grid_offset);
             map_sprite_clear_tile(grid_offset);
@@ -188,7 +193,7 @@ void map_building_tiles_remove(int building_id, int x, int y)
                 map_image_set(grid_offset,
                     image_group(GROUP_TERRAIN_UGLY_GRASS) +
                     (map_random_get(grid_offset) & 7));
-                map_terrain_remove(grid_offset, TERRAIN_CLEARABLE);
+                map_terrain_remove(grid_offset, TERRAIN_CLEARABLE & ~TERRAIN_HIGHWAY);
             }
         }
     }
@@ -216,7 +221,7 @@ void map_building_tiles_set_rubble(int building_id, int x, int y, int size)
             }
             map_property_clear_constructing(grid_offset);
             map_property_set_multi_tile_size(grid_offset, 1);
-            map_aqueduct_set(grid_offset, 0);
+            map_aqueduct_remove(grid_offset);
             map_building_set(grid_offset, 0);
             map_building_damage_clear(grid_offset);
             map_sprite_clear_tile(grid_offset);

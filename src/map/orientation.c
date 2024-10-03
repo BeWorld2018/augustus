@@ -1,10 +1,10 @@
 #include "orientation.h"
 
 #include "assets/assets.h"
-#include "building/building_variant.h"
 #include "building/connectable.h"
 #include "building/image.h"
 #include "building/properties.h"
+#include "building/variant.h"
 #include "city/view.h"
 #include "core/direction.h"
 #include "core/image.h"
@@ -15,6 +15,7 @@
 #include "map/building_tiles.h"
 #include "map/data.h"
 #include "map/grid.h"
+#include "map/natives.h"
 #include "map/property.h"
 #include "map/routing_terrain.h"
 #include "map/terrain.h"
@@ -64,6 +65,7 @@ void map_orientation_change(int counter_clockwise)
     map_tiles_update_all_meadow();
     map_tiles_update_all_rubble();
     map_tiles_update_all_roads();
+    map_tiles_update_all_highways();
     map_tiles_update_all_plazas();
     map_tiles_update_all_walls();
     map_tiles_update_all_aqueducts(0);
@@ -73,6 +75,8 @@ void map_orientation_change(int counter_clockwise)
     map_orientation_update_buildings();
     map_bridge_update_after_rotate(counter_clockwise);
     map_routing_update_walls();
+
+    map_natives_check_land(0);
 
     figure_tower_sentry_reroute();
     figure_hippodrome_horse_reroute();
@@ -91,19 +95,19 @@ int map_orientation_for_gatehouse(int x, int y)
     // tiles within gate, flags:
     // 1  2
     // 4  8
-    if (map_terrain_is(map_grid_offset(x, y), TERRAIN_ROAD)) {
+    if (map_terrain_is(map_grid_offset(x, y), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         road_tiles_within_flags |= 1;
         num_road_tiles_within++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(1, 0), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(1, 0), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         road_tiles_within_flags |= 2;
         num_road_tiles_within++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(0, 1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(0, 1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         road_tiles_within_flags |= 4;
         num_road_tiles_within++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(1, 1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(1, 1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         road_tiles_within_flags |= 8;
         num_road_tiles_within++;
     }
@@ -129,31 +133,31 @@ int map_orientation_for_gatehouse(int x, int y)
     int num_road_tiles_bottom = 0;
     int num_road_tiles_left = 0;
     // top
-    if (map_terrain_is(grid_offset + map_grid_delta(0, -1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(0, -1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_top++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(1, -1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(1, -1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_top++;
     }
     // bottom
-    if (map_terrain_is(grid_offset + map_grid_delta(0, 2), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(0, 2), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_bottom++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(1, 2), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(1, 2), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_bottom++;
     }
     // left
-    if (map_terrain_is(grid_offset + map_grid_delta(-1, 0), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(-1, 0), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_left++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(-1, 1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(-1, 1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_left++;
     }
     // right
-    if (map_terrain_is(grid_offset + map_grid_delta(2, 0), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(2, 0), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_right++;
     }
-    if (map_terrain_is(grid_offset + map_grid_delta(2, 1), TERRAIN_ROAD)) {
+    if (map_terrain_is(grid_offset + map_grid_delta(2, 1), TERRAIN_ROAD | TERRAIN_HIGHWAY)) {
         num_road_tiles_right++;
     }
     // determine direction
@@ -246,15 +250,16 @@ void map_orientation_update_buildings(void)
 {
     for (int i = 1; i < building_count(); i++) {
         building *b = building_get(i);
-        if (b->state == BUILDING_STATE_UNUSED) {
+        if (b->state == BUILDING_STATE_UNUSED || b->state == BUILDING_STATE_DELETED_BY_GAME ||
+            b->state == BUILDING_STATE_RUBBLE) {
             continue;
         }
         switch (b->type) {
             default:
                 break;
             case BUILDING_GATEHOUSE:
-                map_building_tiles_add(i, b->x, b->y, b->size, building_image_get(b),
-                    TERRAIN_GATEHOUSE | TERRAIN_BUILDING);
+                map_building_tiles_add_remove(i, b->x, b->y, b->size, building_image_get(b),
+                    TERRAIN_GATEHOUSE | TERRAIN_BUILDING, TERRAIN_CLEARABLE & ~TERRAIN_HIGHWAY);
                 map_terrain_add_gatehouse_roads(b->x, b->y, 0);
                 break;
             case BUILDING_TRIUMPHAL_ARCH:
@@ -272,9 +277,15 @@ void map_orientation_update_buildings(void)
             case BUILDING_SMALL_STATUE:
             case BUILDING_SMALL_STATUE_ALT:
             case BUILDING_SMALL_STATUE_ALT_B:
+            case BUILDING_GLADIATOR_STATUE:
+            case BUILDING_MEDIUM_STATUE:
             case BUILDING_LEGION_STATUE:
             case BUILDING_PAVILION_BLUE:
+            case BUILDING_HORSE_STATUE:
+            case BUILDING_SMALL_MAUSOLEUM:
+            case BUILDING_LARGE_MAUSOLEUM:
             case BUILDING_DECORATIVE_COLUMN:
+            case BUILDING_WATCHTOWER:
                 map_building_tiles_add(i, b->x, b->y, b->size, building_image_get(b), TERRAIN_BUILDING);
                 break;
             case BUILDING_ROADBLOCK:

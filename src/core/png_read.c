@@ -5,136 +5,201 @@
 #include "core/log.h"
 #include "graphics/color.h"
 
-#include "png.h"
+#include "spng/spng.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define BYTES_PER_PIXEL 4
 
+typedef enum {
+    CACHE_TYPE_NONE = 0,
+    CACHE_TYPE_FILE,
+    CACHE_TYPE_MEMORY
+} cache_type;
+
 static struct {
-    png_structp png_ptr;
-    png_infop info_ptr;
+    spng_ctx *ctx;
     FILE *fp;
+    struct {
+        cache_type type;
+        char path[FILE_NAME_MAX];
+        const uint8_t *buffer;
+        int width;
+        int height;
+        color_t *pixels;
+    } cache;
 } data;
 
-static void unload_png(void)
+int png_load_from_file(const char *path, int is_asset)
 {
-    png_destroy_read_struct(&data.png_ptr, &data.info_ptr, 0);
+    if (data.cache.type == CACHE_TYPE_FILE && strcmp(path, data.cache.path) == 0) {
+        return 1;
+    }
+    png_unload();
+    data.fp = is_asset ? file_open_asset(path, "rb") : file_open(path, "rb");
+    if (!data.fp) {
+        log_error("Unable to open png file", path, 0);
+        return 0;
+    }
+    data.ctx = spng_ctx_new(0);
+    if (!data.ctx) {
+        log_error("Unable to create a png handle context", 0, 0);
+        png_unload();
+        return 0;
+    }
+    if (spng_set_png_file(data.ctx, data.fp)) {
+        log_error("Unable to set png file stream", 0, 0);
+        png_unload();
+        return 0;
+    }
+    data.cache.type = CACHE_TYPE_FILE;
+    snprintf(data.cache.path, FILE_NAME_MAX, "%s", path);
+    return 1;
+}
+
+int png_load_from_buffer(const uint8_t *buffer, size_t length)
+{
+    if (data.cache.type == CACHE_TYPE_MEMORY && buffer == data.cache.buffer) {
+        return 1;
+    }
+    png_unload();
+    if (!buffer) {
+        log_error("Unable to open png file - no buffer provided", 0, 0);
+        return 0;
+    }
+    data.ctx = spng_ctx_new(0);
+    if (!data.ctx) {
+        log_error("Unable to create a png handle context", 0, 0);
+        png_unload();
+        return 0;
+    }
+    if (spng_set_png_buffer(data.ctx, buffer, length)) {
+        log_error("Unable to set png buffer", 0, 0);
+        png_unload();
+        return 0;
+    }
+    data.cache.type = CACHE_TYPE_MEMORY;
+    data.cache.buffer = buffer;
+    return 1;
+}
+
+int png_get_image_size(int *width, int *height)
+{
+    if (data.cache.width && data.cache.height) {
+        *width = data.cache.width;
+        *height = data.cache.height;
+        return 1;
+    }
+    *width = 0;
+    *height = 0;
+    if (!data.ctx) {
+        return 0;
+    }
+    struct spng_ihdr ihdr;
+    if (spng_get_ihdr(data.ctx, &ihdr)) {
+        return 0;
+    }
+    data.cache.width = *width = (int) ihdr.width;
+    data.cache.height = *height = (int) ihdr.height;
+
+    return 1;
+}
+
+static void convert_image_to_argb(color_t *pixels, int total_pixels)
+{
+    uint8_t *src = (uint8_t *) pixels;
+    for (int i = 0; i < total_pixels; ++i) {
+        color_t pixel = ((color_t) * (src + 0)) << COLOR_BITSHIFT_RED;
+        pixel |= ((color_t) * (src + 1)) << COLOR_BITSHIFT_GREEN;
+        pixel |= ((color_t) * (src + 2)) << COLOR_BITSHIFT_BLUE;
+        pixel |= ((color_t) * (src + 3)) << COLOR_BITSHIFT_ALPHA;
+        *pixels = pixel;
+        pixels++;
+        src += BYTES_PER_PIXEL;
+    }
+}
+
+static void close_png(void)
+{
+    spng_ctx_free(data.ctx);
+    data.ctx = 0;
     if (data.fp) {
         file_close(data.fp);
         data.fp = 0;
     }
 }
 
-static int load_png(const char *path)
+static int load_image(void)
 {
-    unload_png();
-    png_byte header[8];
-    data.fp = file_open_asset(path, "rb");
-    if (!data.fp) {
-        log_error("Unable to open png file", path, 0);
+    size_t image_size;
+    if (spng_decoded_image_size(data.ctx, SPNG_FMT_RGBA8, &image_size)) {
+        log_error("Unable to retrieve png image size", 0, 0);
+        png_unload();
         return 0;
     }
-    size_t bytes_read = fread(header, 1, 8, data.fp);
-    if (bytes_read != 8 || png_sig_cmp(header, 0, 8)) {
-        log_error("Invalid png file", path, 0);
-        unload_png();
-        return 0;
-    }
-
-    data.png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
-    if (!data.png_ptr) {
-        log_error("Unable to create a png struct", 0, 0);
-        unload_png();
-        return 0;
-    }
-    data.info_ptr = png_create_info_struct(data.png_ptr);
-    if (!data.info_ptr) {
-        log_error("Unable to create a png struct", 0, 0);
-        unload_png();
-        return 0;
-    }
-
-    if (setjmp(png_jmpbuf(data.png_ptr))) {
-        log_error("Unable to read png information", 0, 0);
-        unload_png();
-        return 0;
-    }
-    png_init_io(data.png_ptr, data.fp);
-    png_set_sig_bytes(data.png_ptr, 8);
-    png_read_info(data.png_ptr, data.info_ptr);
-    return 1;
-}
-
-int png_get_image_size(const char *path, int *width, int *height)
-{
-    *width = 0;
-    *height = 0;
-    if (!load_png(path)) {
-        return 0;
-    }
-    *width = png_get_image_width(data.png_ptr, data.info_ptr);
-    *height = png_get_image_height(data.png_ptr, data.info_ptr);
-    unload_png();
-
-    return 1;
-}
-
-int png_read(const char *path, color_t *pixels, int width, int height)
-{
-    if (!load_png(path)) {
-        return 0;
-    }
-    png_bytep row = 0;
-    if (setjmp(png_jmpbuf(data.png_ptr))) {
-        log_error("Unable to read png file", 0, 0);
-        free(row);
-        unload_png();
-        return 0;
-    }
-    png_set_gray_to_rgb(data.png_ptr);
-    png_set_filler(data.png_ptr, 0xFF, PNG_FILLER_AFTER);
-    png_set_expand(data.png_ptr);
-    png_set_strip_16(data.png_ptr);
-    if (png_set_interlace_handling(data.png_ptr) != 1) {
-        log_info("The image has interlacing and therefore will not open correctly", 0, 0);
-    }
-    png_read_update_info(data.png_ptr, data.info_ptr);
-
-    int image_width = png_get_image_width(data.png_ptr, data.info_ptr);
-    int image_height = png_get_image_height(data.png_ptr, data.info_ptr);
-    int width_padding = 0;
-
-    if (width > image_width) {
-        width_padding = width - image_width;
-        width = image_width;
-    }
-    if (height > image_height) {
-        height = image_height;
-    }
-
-    row = malloc(sizeof(png_byte) * image_width * BYTES_PER_PIXEL);
-    if (!row) {
+    int total_pixels = data.cache.width * data.cache.height;
+    data.cache.pixels = malloc(image_size);
+    if (!data.cache.pixels) {
         log_error("Unable to load png file. Out of memory", 0, 0);
-        unload_png();
+        png_unload();
         return 0;
     }
-    color_t *dst = pixels;
-    for (int y = 0; y < height; ++y) {
-        png_read_row(data.png_ptr, row, 0);
-        png_bytep src = row;
-        for (int x = 0; x < width; ++x) {
-            *dst = ((color_t) * (src + 0)) << COLOR_BITSHIFT_RED;
-            *dst |= ((color_t) * (src + 1)) << COLOR_BITSHIFT_GREEN;
-            *dst |= ((color_t) * (src + 2)) << COLOR_BITSHIFT_BLUE;
-            *dst |= ((color_t) * (src + 3)) << COLOR_BITSHIFT_ALPHA;
-            dst++;
-            src += BYTES_PER_PIXEL;
-        }
-        dst += width_padding;
+    if (spng_decode_image(data.ctx, data.cache.pixels, image_size, SPNG_FMT_RGBA8, SPNG_DECODE_TRNS)) {
+        log_error("Unable to start decoding png file", 0, 0);
+        png_unload();
+        return 0;
     }
-    free(row);
-    unload_png();
+    convert_image_to_argb(data.cache.pixels, total_pixels);
+    close_png();
     return 1;
+}
+
+static void set_pixels(color_t *pixels,
+    int src_x, int src_y, int width, int height, int dst_x, int dst_y, int dst_row_width, int rotate)
+{
+    int readable_height = (height + src_y <= data.cache.height) ?
+        height : (data.cache.height - src_y);
+    int readable_width = (width + src_x <= data.cache.width) ? width : (data.cache.width - src_x);
+
+    if (!rotate) {
+        for (int y = 0; y < readable_height; y++) {
+            memcpy(&pixels[(y + dst_y) * dst_row_width + dst_x],
+                &data.cache.pixels[(src_y + y) * data.cache.width + src_x],
+                readable_width * sizeof(color_t));
+        }
+    } else {
+        for (int y = 0; y < readable_height; y++) {
+            color_t *src_pixel = &data.cache.pixels[(src_y + y) * data.cache.width + src_x];
+            color_t *dst_pixel = &pixels[(dst_y + width - 1) *
+                dst_row_width + y + dst_x];
+            for (int x = 0; x < readable_width; x++) {
+                *dst_pixel = *src_pixel++;
+                dst_pixel -= dst_row_width;
+            }
+        }
+    }
+}
+
+int png_read(color_t *pixels, int src_x, int src_y, int width, int height,
+    int dst_x, int dst_y, int dst_row_width, int rotate)
+{
+    if (!data.cache.pixels) {
+        if (!data.ctx) {
+            return 0;
+        }
+        if (!png_get_image_size(&data.cache.width, &data.cache.height) || !load_image()) {
+            return 0;
+        }
+    }
+    set_pixels(pixels, src_x, src_y, width, height, dst_x, dst_y, dst_row_width, rotate);
+    return 1;
+}
+
+void png_unload(void)
+{
+    close_png();
+    free(data.cache.pixels);
+    memset(&data.cache, 0, sizeof(data.cache));
 }

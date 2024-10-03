@@ -2,6 +2,8 @@
 
 #include "building/building.h"
 #include "building/list.h"
+#include "building/properties.h"
+#include "building/roadblock.h"
 #include "city/buildings.h"
 #include "city/military.h"
 #include "core/calc.h"
@@ -41,10 +43,12 @@ static int has_building_on_native_land(int x, int y, int size, int radius)
                     type != BUILDING_NATIVE_HUT &&
                     type != BUILDING_NATIVE_MEETING &&
                     type != BUILDING_NATIVE_CROPS &&
-                    type != BUILDING_ROADBLOCK
-                    ) {
+                    (!building_type_is_roadblock(type) || type == BUILDING_PALISADE_GATE ||
+                        type == BUILDING_TRIUMPHAL_ARCH || type == BUILDING_GATEHOUSE)) {
                     return 1;
                 }
+            } else if (map_terrain_is(map_grid_offset(xx, yy), TERRAIN_AQUEDUCT | TERRAIN_WALL | TERRAIN_GARDEN)) {
+                return 1;
             }
         }
     }
@@ -53,9 +57,7 @@ static int has_building_on_native_land(int x, int y, int size, int radius)
 
 static void determine_meeting_center(void)
 {
-
     // Determine closest meeting center for hut
-
     for (building *b = building_first_of_type(BUILDING_NATIVE_HUT); b; b = b->next_of_type) {
         if (b->state != BUILDING_STATE_IN_USE) {
             continue;
@@ -75,7 +77,6 @@ static void determine_meeting_center(void)
 
 void map_natives_init(void)
 {
-    int meeting_center_set = 0;
     int image_hut = scenario_building_image_native_hut();
     int image_meeting = scenario_building_image_native_meeting();
     int image_crops = scenario_building_image_native_crops();
@@ -122,9 +123,6 @@ void map_natives_init(void)
                     map_building_set(grid_offset + map_grid_delta(0, 1), b->id);
                     map_building_set(grid_offset + map_grid_delta(1, 1), b->id);
                     mark_native_land(b->x, b->y, 2, 6);
-                    if (!meeting_center_set) {
-                        city_buildings_set_main_native_meeting_center(b->x, b->y);
-                    }
                     break;
                 case BUILDING_NATIVE_HUT:
                     b->sentiment.native_anger = 100;
@@ -184,27 +182,29 @@ void map_natives_init_editor(void)
     }
 }
 
-void map_natives_check_land(void)
+void map_natives_check_land(int update_behavior)
 {
     map_property_clear_all_native_land();
-    city_military_decrease_native_attack_duration();
+    if (update_behavior) {
+        city_military_decrease_native_attack_duration();
+    }
 
     building_type native_buildings[] = { BUILDING_NATIVE_HUT, BUILDING_NATIVE_MEETING };
-    int native_size[] = { 1, 2 };
-    int native_radius[] = { 3, 6 };
 
     for (int i = 0; i < 2; i++) {
         building_type type = native_buildings[i];
+        int size = building_properties_for_type(type)->size;
+        int radius = size * 3;
         for (building *b = building_first_of_type(type); b; b = b->next_of_type) {
             if (b->state != BUILDING_STATE_IN_USE) {
                 continue;
             }
             if (b->sentiment.native_anger >= 100) {
-                mark_native_land(b->x, b->y, native_size[i], native_radius[i]);
-                if (has_building_on_native_land(b->x, b->y, native_size[i], native_radius[i])) {
+                mark_native_land(b->x, b->y, size, radius);
+                if (!city_military_natives_are_retreating() && update_behavior && has_building_on_native_land(b->x, b->y, size, radius)) {
                     city_military_start_native_attack();
                 }
-            } else {
+            } else if (update_behavior) {
                 b->sentiment.native_anger++;
             }
         }

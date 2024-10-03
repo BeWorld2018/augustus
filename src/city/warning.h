@@ -59,7 +59,7 @@ typedef enum {
     WARNING_DATA_LIMIT_REACHED = 65,
     WARNING_NO_MESS_HALL = 66,
     WARNING_MAX_GRAND_TEMPLES = 67,
-    WARNING_WATER_NEEDED_FOR_LIGHTHOUSE = 68,
+    WARNING_WATER_NEEDED_FOR_BUILDING = 68,
     WARNING_RESOURCES_NOT_AVAILABLE = 69,
     WARNING_VARIANT_TOGGLE = 70,
     WARNING_SECESSION = 71,
@@ -68,18 +68,35 @@ typedef enum {
     WARNING_THEFT = 74,
     WARNING_WOLF_NEARBY = 75,
     WARNING_BET_VICTORY = 76,
-    WARNING_BET_DEFEAT = 77
+    WARNING_BET_DEFEAT = 77,
+    WARNING_DATA_COPY_SUCCESS = 78,
+    WARNING_DATA_COPY_NOT_SUPPORTED = 79,
+    WARNING_DATA_PASTE_SUCCESS = 80,
+    WARNING_DATA_PASTE_FAILURE = 81,
+    WARNING_DATA_MOTHBALL_ON = 82,
+    WARNING_DATA_MOTHBALL_OFF = 83,
+    WARNING_GOLD_NEEDED = 84,
+    WARNING_BUILD_GOLD_MINE = 85,
+    WARNING_SAND_NEEDED = 86,
+    WARNING_BUILD_SAND_PIT = 87,
+    WARNING_STONE_NEEDED = 88,
+    WARNING_BUILD_STONE_MINE = 89,
+    WARNING_SENATE_NEEDED = 90,
+    WARNING_BUILD_SENATE = 91,
+    WARNING_NO_ARMOURY = 92
 } warning_type;
 
-void city_warning_show(warning_type type);
+#define NEW_WARNING_SLOT 0
+
+int city_warning_show(warning_type type, int id);
+int city_warning_show_custom(const uint8_t *text, int id);
 
 int city_has_warnings(void);
 
-const uint8_t *city_warning_get(int id);
+const uint8_t *city_warning_get(int position);
 
+void city_warning_clear_id(int id);
 void city_warning_clear_all(void);
 void city_warning_clear_outdated(void);
-
-void city_warning_show_console(uint8_t *warning_text);
 
 #endif // CITY_WARNING_H

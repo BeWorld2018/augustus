@@ -4,49 +4,49 @@
 #include "core/encoding.h"
 #include "core/file.h"
 #include "core/lang.h"
+#include "core/log.h"
 #include "core/time.h"
 #include "game/game.h"
 #include "game/settings.h"
 #include "game/system.h"
 #include "graphics/screen.h"
+#include "graphics/window.h"
 #include "input/mouse.h"
 #include "input/touch.h"
+#include "platform/android/android.h"
 #include "platform/arguments.h"
+#include "platform/cursor.h"
+#include "platform/emscripten/emscripten.h"
 #include "platform/file_manager.h"
+#include "platform/file_manager_cache.h"
 #include "platform/joystick.h"
 #include "platform/keyboard_input.h"
 #include "platform/platform.h"
 #include "platform/prefs.h"
+#include "platform/renderer.h"
 #include "platform/screen.h"
+#include "platform/switch/switch.h"
 #include "platform/touch.h"
+#include "platform/vita/vita.h"
+#include "window/asset_previewer.h"
 
 #include "tinyfiledialogs/tinyfiledialogs.h"
 
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "platform/android/android.h"
-#include "platform/emscripten/emscripten.h"
-#include "platform/switch/switch.h"
-#include "platform/vita/vita.h"
+#include <string.h>
 
 #ifdef __MORPHOS__
 unsigned long __stack = 1000000;
 #endif
 
-#if defined(_WIN32)
-#include <string.h>
+#ifdef _MSC_VER
+#include <Windows.h>
 #endif
 
 #if defined(USE_TINYFILEDIALOGS) || defined(__ANDROID__)
 #define SHOW_FOLDER_SELECT_DIALOG
-#endif
-
-#ifdef DRAW_FPS
-#include "graphics/window.h"
-#include "graphics/graphics.h"
-#include "graphics/text.h"
 #endif
 
 #define INTPTR(d) (*(int*)(d))
@@ -62,45 +62,60 @@ enum {
 static struct {
     int active;
     int quit;
-} data = {1, 0};
+    struct {
+        int frame_count;
+        int last_fps;
+        Uint32 last_update_time;
+    } fps;
+    FILE *log_file;
+} data = { 1 };
 
-#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__ANDROID__) || defined(__MORPHOS__)
-/* Log to separate file on windows, since we don't have a console there */
-static FILE *log_file = 0;
+static void write_to_output(FILE *output, const char *message)
+{
+    fwrite(message, sizeof(char), strlen(message), output);
+    fflush(output);
+}
 
 static void write_log(void *userdata, int category, SDL_LogPriority priority, const char *message)
 {
-    if (log_file) {
-        if (priority == SDL_LOG_PRIORITY_ERROR) {
-            fwrite("ERROR: ", sizeof(char), 7, log_file);
-        } else {
-            fwrite("INFO: ", sizeof(char), 6, log_file);
-        }
-        fwrite(message, sizeof(char), strlen(message), log_file);
-        fwrite("\n", sizeof(char), 1, log_file);
-        fflush(log_file);
+    char log_text[300] = { 0 };
+    snprintf(log_text, 300, "%s %s\n", priority == SDL_LOG_PRIORITY_ERROR ? "ERROR: " : "INFO: ", message);
+    if (data.log_file) {
+        write_to_output(data.log_file, log_text);
     }
+    // On Windows MSVC, we can at least get output to the debug window
+#if defined(_MSC_VER) && !defined(NDEBUG)
+    OutputDebugStringA(log_text);
+#else
+    write_to_output(stdout, log_text);
+#endif
+}
+
+static void backup_log(void)
+{
+    // On some platforms (vita, android), not removing the file will not empty it when reopening for writing
+    file_remove("augustus-log-backup.txt");
+    platform_file_manager_copy_file("augustus-log.txt", "augustus-log-backup.txt");
 }
 
 static void setup_logging(void)
 {
+    backup_log();
+
     // On some platforms (vita, android), not removing the file will not empty it when reopening for writing
     file_remove("augustus-log.txt");
-    log_file = file_open("augustus-log.txt", "wt");
+    data.log_file = file_open("augustus-log.txt", "wt");
     SDL_LogSetOutputFunction(write_log, NULL);
 }
 
 static void teardown_logging(void)
 {
-    if (log_file) {
-        file_close(log_file);
+    log_repeated_messages();
+
+    if (data.log_file) {
+        file_close(data.log_file);
     }
 }
-
-#else
-static void setup_logging(void) {}
-static void teardown_logging(void) {}
-#endif
 
 static void post_event(int code)
 {
@@ -108,6 +123,24 @@ static void post_event(int code)
     event.user.type = SDL_USEREVENT;
     event.user.code = code;
     SDL_PushEvent(&event);
+}
+
+int system_supports_select_folder_dialog(void)
+{
+#ifdef USE_TINYFILEDIALOGS
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+const char *system_show_select_folder_dialog(const char *title, const char *default_path)
+{
+#ifdef USE_TINYFILEDIALOGS
+    return tinyfd_selectFolderDialog(title, default_path);
+#else
+    return 0;
+#endif
 }
 
 void system_exit(void)
@@ -140,6 +173,19 @@ void system_set_fullscreen(int fullscreen)
     post_event(fullscreen ? USER_EVENT_FULLSCREEN : USER_EVENT_WINDOWED);
 }
 
+uint64_t system_get_ticks(void)
+{
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    if (platform_sdl_version_at_least(2, 0, 18)) {
+        return SDL_GetTicks64();
+    } else {
+        return SDL_GetTicks();
+    }
+#else
+    return SDL_GetTicks();
+#endif
+}
+
 #ifdef _WIN32
 #define PLATFORM_ENABLE_PER_FRAME_CALLBACK
 static void platform_per_frame_callback(void)
@@ -148,55 +194,28 @@ static void platform_per_frame_callback(void)
 }
 #endif
 
-#ifdef DRAW_FPS
-static struct {
-    int frame_count;
-    int last_fps;
-    Uint32 last_update_time;
-} fps = { 0, 0, 0 };
-
 static void run_and_draw(void)
 {
-    time_millis time_before_run = SDL_GetTicks();
+    time_millis time_before_run = system_get_ticks();
     time_set_millis(time_before_run);
 
     game_run();
-    Uint32 time_between_run_and_draw = SDL_GetTicks();
     game_draw();
-    Uint32 time_after_draw = SDL_GetTicks();
+    Uint32 time_after_draw = system_get_ticks();
 
-    fps.frame_count++;
-    if (time_after_draw - fps.last_update_time > 1000) {
-        fps.last_fps = fps.frame_count;
-        fps.last_update_time = time_after_draw;
-        fps.frame_count = 0;
+    data.fps.frame_count++;
+    if (time_after_draw - data.fps.last_update_time > 1000) {
+        data.fps.last_fps = data.fps.frame_count;
+        data.fps.last_update_time = time_after_draw;
+        data.fps.frame_count = 0;
     }
-    if (window_is(WINDOW_CITY) || window_is(WINDOW_CITY_MILITARY) || window_is(WINDOW_SLIDING_SIDEBAR)) {
-        int y_offset = 24;
-        int y_offset_text = y_offset + 5;
-        graphics_fill_rect(0, y_offset, 100, 20, COLOR_WHITE);
-        text_draw_number(fps.last_fps,
-            'f', "", 5, y_offset_text, FONT_NORMAL_PLAIN, COLOR_FONT_RED);
-        text_draw_number(time_between_run_and_draw - time_before_run,
-            'g', "", 40, y_offset_text, FONT_NORMAL_PLAIN, COLOR_FONT_RED);
-        text_draw_number(time_after_draw - time_between_run_and_draw,
-            'd', "", 70, y_offset_text, FONT_NORMAL_PLAIN, COLOR_FONT_RED);
+
+    if (config_get(CONFIG_UI_DISPLAY_FPS)) {
+        game_display_fps(data.fps.last_fps);
     }
-    platform_screen_update();
-    platform_screen_render();
-}
-#else
-static void run_and_draw(void)
-{
-    time_set_millis(SDL_GetTicks());
 
-    game_run();
-    game_draw();
-
-    platform_screen_update();
-    platform_screen_render();
+    platform_renderer_render();
 }
-#endif
 
 static void handle_mouse_button(SDL_MouseButtonEvent *event, int is_down)
 {
@@ -234,13 +253,36 @@ static void handle_window_event(SDL_WindowEvent *event, int *window_active)
             break;
 
         case SDL_WINDOWEVENT_SHOWN:
-            SDL_Log("Window %d shown", (unsigned int) event->windowID);
+            SDL_Log("Window %u shown", (unsigned int) event->windowID);
+#ifdef USE_FILE_CACHE
+            platform_file_manager_cache_invalidate();
+#endif
             *window_active = 1;
             break;
         case SDL_WINDOWEVENT_HIDDEN:
-            SDL_Log("Window %d hidden", (unsigned int) event->windowID);
+            SDL_Log("Window %u hidden", (unsigned int) event->windowID);
             *window_active = 0;
             break;
+
+        case SDL_WINDOWEVENT_EXPOSED:
+            SDL_Log("Window %u exposed", (unsigned int) event->windowID);
+            window_invalidate();
+            break;
+
+        default:
+            break;
+
+    }
+}
+
+static int handle_event_immediate(void *param1, SDL_Event *event)
+{
+    switch (event->type) {
+        case SDL_APP_WILLENTERBACKGROUND:
+            platform_renderer_pause();
+            return 0;
+        default:
+            return 1;
     }
 }
 
@@ -250,12 +292,35 @@ static void handle_event(SDL_Event *event)
         case SDL_WINDOWEVENT:
             handle_window_event(&event->window, &data.active);
             break;
+        case SDL_APP_DIDENTERFOREGROUND:
+            platform_renderer_resume();
+#if SDL_VERSION_ATLEAST(2, 0, 2)
+            // fallthrough
+        case SDL_RENDER_TARGETS_RESET:
+#endif
+            platform_renderer_invalidate_target_textures();
+            window_invalidate();
+            break;
+#if SDL_VERSION_ATLEAST(2, 0, 4)
+        case SDL_RENDER_DEVICE_RESET:
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING,
+                "Render device lost",
+                "The rendering context was lost.The game will likely blackscreen.\n\n"
+                "Please restart the game to fix the issue.",
+                NULL);
+            break;
+#endif
         case SDL_KEYDOWN:
             platform_handle_key_down(&event->key);
             break;
         case SDL_KEYUP:
             platform_handle_key_up(&event->key);
             break;
+#if defined(__ANDROID__) && SDL_VERSION_ATLEAST(2, 24, 0) && !SDL_VERSION_ATLEAST(2, 24, 1)
+        case SDL_TEXTEDITING:
+            platform_handle_editing_text(&event->edit);
+            break;
+#endif
         case SDL_TEXTINPUT:
             platform_handle_text(&event->text);
             break;
@@ -337,6 +402,7 @@ static void handle_event(SDL_Event *event)
 
 static void teardown(void)
 {
+    log_repeated_messages();
     SDL_Log("Exiting game");
     game_exit();
     platform_screen_destroy();
@@ -373,7 +439,7 @@ static void main_loop(void)
     }
 }
 
-static int init_sdl(void)
+static int init_sdl(int enable_joysticks)
 {
     SDL_Log("Initializing SDL");
 
@@ -383,10 +449,17 @@ static int init_sdl(void)
 #endif
 
     if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_JOYSTICK) != 0) {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialize SDL: %s", SDL_GetError());
-        return 0;
+        // Try starting SDL without joystick support
+        if (SDL_Init(SDL_INIT_AUDIO | SDL_INIT_VIDEO) != 0) {
+            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Could not initialize SDL: %s", SDL_GetError());
+            return 0;
+        } else {
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "Could not enable joystick support");
+        }
+    } else {
+        platform_joystick_init(enable_joysticks);
     }
-    platform_joystick_init();
+    SDL_SetEventFilter(handle_event_immediate, 0);
 #if SDL_VERSION_ATLEAST(2, 0, 10)
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
@@ -396,18 +469,19 @@ static int init_sdl(void)
 #ifdef __ANDROID__
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 #endif
-    SDL_Log("SDL initialized");
+    SDL_version version;
+    SDL_GetVersion(&version);
+    SDL_Log("SDL initialized, version %u.%u.%u", version.major, version.minor, version.patch);
     return 1;
 }
 
 #ifdef SHOW_FOLDER_SELECT_DIALOG
 static const char *ask_for_data_dir(int again)
 {
-#ifdef __ANDROID__
     if (again) {
         const SDL_MessageBoxButtonData buttons[] = {
-           {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "OK"},
-           {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"}
+            {SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "OK"},
+            {SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Cancel"}
         };
         const SDL_MessageBoxData messageboxdata = {
             SDL_MESSAGEBOX_WARNING, NULL, "Wrong folder selected",
@@ -423,21 +497,12 @@ static const char *ask_for_data_dir(int again)
             return NULL;
         }
     }
+#ifdef __ANDROID__
     return android_show_c3_path_dialog(again);
 #else
-    if (again) {
-        int result = tinyfd_messageBox("Wrong folder selected",
-            "Augustus requires the original files from Caesar 3 to run.\n\n"
-            "The selected folder is not a proper Caesar 3 folder.\n\n"
-            "Press OK to select another folder or Cancel to exit.",
-            "okcancel", "warning", 1);
-        if (!result) {
-            return NULL;
-        }
-        }
-    return tinyfd_selectFolderDialog("Please select your Caesar 3 folder", NULL);
+    return system_show_select_folder_dialog("Please select your Caesar 3 folder", 0);
 #endif
-    }
+}
 #endif
 
 static int pre_init(const char *custom_data_dir)
@@ -446,6 +511,11 @@ static int pre_init(const char *custom_data_dir)
         SDL_Log("Loading game from %s", custom_data_dir);
         if (!platform_file_manager_set_base_path(custom_data_dir)) {
             SDL_Log("%s: directory not found", custom_data_dir);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                "Error",
+                "Augustus requires the original files from Caesar 3.\n\n"
+                "Please enter the proper directory or copy the files to the selected directory.",
+                NULL);
             return 0;
         }
         return game_pre_init();
@@ -474,7 +544,7 @@ static int pre_init(const char *custom_data_dir)
 
 #ifdef SHOW_FOLDER_SELECT_DIALOG
     const char *user_dir = pref_data_dir();
-    if (user_dir) {
+    if (*user_dir) {
         SDL_Log("Loading game from user pref %s", user_dir);
         if (platform_file_manager_set_base_path(user_dir) && game_pre_init()) {
             return 1;
@@ -487,19 +557,12 @@ static int pre_init(const char *custom_data_dir)
         if (platform_file_manager_set_base_path(user_dir) && game_pre_init()) {
             pref_save_data_dir(user_dir);
 #ifdef __ANDROID__
-            android_toast_message("C3 files found. Path saved.");
+            SDL_AndroidShowToast("C3 files found. Path saved.", 0, 0, 0, 0);
 #endif
             return 1;
         }
         user_dir = ask_for_data_dir(1);
     }
-#elif defined(__vita__)
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-        "Error",
-        "Augustus requires the original files from Caesar 3 to run.\n\n"
-        "Please add the files to:\n\n"
-        VITA_PATH_PREFIX,
-        NULL);
 #else
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
         "Augustus requires the original files from Caesar 3 to run.",
@@ -511,21 +574,39 @@ static int pre_init(const char *custom_data_dir)
     return 0;
 }
 
-static void setup(const julius_args *args)
+static void setup(const augustus_args *args)
 {
     system_setup_crash_handler();
     setup_logging();
 
-    SDL_Log("Augustus version %s", system_version());
+    if (data.log_file) {
+        SDL_Log("Augustus version %s, %s build", system_version(), system_architecture());
+        SDL_Log("Running on: %s", system_OS());
+    }
 
-    if (!init_sdl()) {
+    if (!init_sdl(args->enable_joysticks)) {
         SDL_Log("Exiting: SDL init failed");
         exit_with_status(-1);
     }
 
-    if (!pre_init(args->data_directory)) {
+#ifdef __vita__
+    const char *base_dir = VITA_PATH_PREFIX;
+#else
+    const char *base_dir = args->data_directory;
+#endif
+
+    if (!pre_init(base_dir)) {
         SDL_Log("Exiting: game pre-init failed");
         exit_with_status(1);
+    }
+
+    // If starting the log file failed (because, for example, the executable path isn't writable)
+    // try again, placing the log file on the C3 path
+    if (!data.log_file) {
+        setup_logging();
+        // We always want this info
+        SDL_Log("Augustus version %s, %s build", system_version(), system_architecture());
+        SDL_Log("Running on: %s", system_OS());
     }
 
     if (args->force_windowed && setting_fullscreen()) {
@@ -533,6 +614,10 @@ static void setup(const julius_args *args)
         setting_window(&w, &h);
         setting_set_display(0, w, h);
         SDL_Log("Forcing windowed mode with size %d x %d", w, h);
+    }
+    if (args->force_fullscreen && !setting_fullscreen()) {
+        setting_set_display(1, 0, 0);
+        SDL_Log("Forcing fullscreen mode");
     }
 
     // handle arguments
@@ -545,20 +630,27 @@ static void setup(const julius_args *args)
 
     char title[100];
     encoding_to_utf8(lang_get_string(9, 0), title, 100, 0);
-    if (!platform_screen_create(title, config_get(CONFIG_SCREEN_DISPLAY_SCALE))) {
+    if (!platform_screen_create(title, config_get(CONFIG_SCREEN_DISPLAY_SCALE), args->display_id)) {
         SDL_Log("Exiting: SDL create window failed");
         exit_with_status(-2);
     }
-    // this has to come after platform_screen_create, otherwise it fails on Nintendo Switch
-    system_init_cursors(config_get(CONFIG_SCREEN_CURSOR_SCALE));
 
 #ifdef PLATFORM_ENABLE_INIT_CALLBACK
     platform_init_callback();
 #endif
 
-    time_set_millis(SDL_GetTicks());
+    if (args->use_software_cursor) {
+        platform_cursor_force_software_mode();
+    }
 
-    if (!game_init()) {
+    // This has to come after platform_screen_create, otherwise it fails on Nintendo Switch
+    system_init_cursors(config_get(CONFIG_SCREEN_CURSOR_SCALE));
+
+    time_set_millis(system_get_ticks());
+
+    int result = args->launch_asset_previewer ? window_asset_previewer_show() : game_init();
+
+    if (!result) {
         SDL_Log("Exiting: game init failed");
         exit_with_status(2);
     }
@@ -569,10 +661,12 @@ static void setup(const julius_args *args)
 
 int main(int argc, char **argv)
 {
-    julius_args args;
+    augustus_args args;
     platform_parse_arguments(argc, argv, &args);
 
     setup(&args);
+
+
 
     mouse_set_inside_window(1);
     run_and_draw();

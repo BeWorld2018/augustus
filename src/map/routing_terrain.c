@@ -31,38 +31,26 @@ void map_routing_update_land(void)
 static int get_land_type_citizen_building(int grid_offset)
 {
     building *b = building_get(map_building_at(grid_offset));
+    int terrain = map_terrain_get(grid_offset);
     int type = CITIZEN_N1_BLOCKED;
     switch (b->type) {
         default:
             return CITIZEN_N1_BLOCKED;
         case BUILDING_WAREHOUSE:
-        case BUILDING_GATEHOUSE:
             type = CITIZEN_0_ROAD;
+            break;
+        case BUILDING_GATEHOUSE:
+            if (terrain & TERRAIN_HIGHWAY) {
+                type = CITIZEN_1_HIGHWAY;
+            } else {
+                type = CITIZEN_0_ROAD;
+            }
             break;
         case BUILDING_ROADBLOCK:
             type = CITIZEN_0_ROAD;
             break;
         case BUILDING_FORT_GROUND:
             type = CITIZEN_2_PASSABLE_TERRAIN;
-            break;
-        case BUILDING_TRIUMPHAL_ARCH:
-            if (b->subtype.orientation == 3) {
-                switch (map_property_multi_tile_xy(grid_offset)) {
-                    case EDGE_X0Y1:
-                    case EDGE_X1Y1:
-                    case EDGE_X2Y1:
-                        type = CITIZEN_0_ROAD;
-                        break;
-                }
-            } else {
-                switch (map_property_multi_tile_xy(grid_offset)) {
-                    case EDGE_X1Y0:
-                    case EDGE_X1Y1:
-                    case EDGE_X1Y2:
-                        type = CITIZEN_0_ROAD;
-                        break;
-                }
-            }
             break;
         case BUILDING_GRANARY:
             switch (map_property_multi_tile_xy(grid_offset)) {
@@ -120,6 +108,8 @@ void map_routing_update_land_citizen(void)
             int terrain = map_terrain_get(grid_offset);
             if (terrain & TERRAIN_ROAD) {
                 terrain_land_citizen.items[grid_offset] = CITIZEN_0_ROAD;
+            } else if (terrain & TERRAIN_HIGHWAY) {
+                terrain_land_citizen.items[grid_offset] = CITIZEN_1_HIGHWAY;
             } else if (terrain & (TERRAIN_RUBBLE | TERRAIN_ACCESS_RAMP | TERRAIN_GARDEN)) {
                 terrain_land_citizen.items[grid_offset] = CITIZEN_2_PASSABLE_TERRAIN;
             } else if (terrain & (TERRAIN_BUILDING | TERRAIN_GATEHOUSE)) {
@@ -174,6 +164,14 @@ static int get_land_type_noncitizen(int grid_offset)
                     break;
             }
             break;
+        case BUILDING_ROOFED_GARDEN_WALL_GATE:
+        case BUILDING_LOOPED_GARDEN_GATE:
+        case BUILDING_PANELLED_GARDEN_GATE:
+        case BUILDING_ROADBLOCK:
+        case BUILDING_HEDGE_GATE_DARK:
+        case BUILDING_HEDGE_GATE_LIGHT:
+            type = NONCITIZEN_0_PASSABLE;
+            break;
     }
     return type;
 }
@@ -187,12 +185,14 @@ static void map_routing_update_land_noncitizen(void)
             int terrain = map_terrain_get(grid_offset);
             if (terrain & TERRAIN_GATEHOUSE) {
                 terrain_land_noncitizen.items[grid_offset] = NONCITIZEN_4_GATEHOUSE;
+            } else if (terrain & TERRAIN_BUILDING) {
+                terrain_land_noncitizen.items[grid_offset] = get_land_type_noncitizen(grid_offset);
             } else if (terrain & TERRAIN_ROAD) {
+                terrain_land_noncitizen.items[grid_offset] = NONCITIZEN_0_PASSABLE;
+            } else if (terrain & TERRAIN_HIGHWAY) {
                 terrain_land_noncitizen.items[grid_offset] = NONCITIZEN_0_PASSABLE;
             } else if (terrain & (TERRAIN_GARDEN | TERRAIN_ACCESS_RAMP | TERRAIN_RUBBLE)) {
                 terrain_land_noncitizen.items[grid_offset] = NONCITIZEN_2_CLEARABLE;
-            } else if (terrain & TERRAIN_BUILDING) {
-                terrain_land_noncitizen.items[grid_offset] = get_land_type_noncitizen(grid_offset);
             } else if (terrain & TERRAIN_AQUEDUCT) {
                 terrain_land_noncitizen.items[grid_offset] = NONCITIZEN_2_CLEARABLE;
             } else if (terrain & TERRAIN_WALL) {
@@ -334,13 +334,18 @@ int map_routing_wall_tile_in_radius(int x, int y, int radius, int *x_wall, int *
 
 int map_routing_citizen_is_passable(int grid_offset)
 {
-    return terrain_land_citizen.items[grid_offset] == CITIZEN_0_ROAD ||
-        terrain_land_citizen.items[grid_offset] == CITIZEN_2_PASSABLE_TERRAIN;
+    return terrain_land_citizen.items[grid_offset] >= CITIZEN_0_ROAD &&
+        terrain_land_citizen.items[grid_offset] <= CITIZEN_2_PASSABLE_TERRAIN;
 }
 
 int map_routing_citizen_is_road(int grid_offset)
 {
     return terrain_land_citizen.items[grid_offset] == CITIZEN_0_ROAD;
+}
+
+int map_routing_citizen_is_highway(int grid_offset)
+{
+    return terrain_land_citizen.items[grid_offset] == CITIZEN_1_HIGHWAY;
 }
 
 int map_routing_citizen_is_passable_terrain(int grid_offset)

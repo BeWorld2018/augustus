@@ -11,10 +11,15 @@
 #define MAX_LINE 100
 #define MAX_MAPPINGS HOTKEY_MAX_ITEMS * 2
 
+#define HOTKEY_CONFIG_UNVERSIONED 0
+#define HOTKEY_CONFIG_ZOOM 1
+#define HOTKEY_CURRENT_VERSION HOTKEY_CONFIG_ZOOM
+
 static const char *INI_FILENAME = "augustus-hotkeys.ini";
 
 // Keep this in the same order as the actions in hotkey_config.h
 static const char *ini_keys[] = {
+    "version",
     "arrow_up",
     "arrow_down",
     "arrow_left",
@@ -26,14 +31,19 @@ static const char *ini_keys[] = {
     "decrease_game_speed",
     "rotate_map_left",
     "rotate_map_right",
+    "zoom_in",
+    "zoom_out",
+    "reset_zoom",
     "build_vacant_house",
     "build_clear_land",
     "build_road",
     "build_plaza",
     "build_gardens",
+    "build_overgrown_gardens",
     "build_prefecture",
     "build_engineers_post",
     "build_doctor",
+    "build_barber",
     "build_granary",
     "build_warehouse",
     "build_market",
@@ -82,10 +92,41 @@ static const char *ini_keys[] = {
     "resize_to_1024",
     "save_screenshot",
     "save_city_screenshot",
+    "save_minimap_screenshot",
     "clone_building",
     "copy_building_settings",
     "paste_building_settings",
-    "undo"
+    "undo",
+    "mothball_toggle",
+    "storage_order",
+    "show_overlay_entertainment",
+    "show_overlay_education",
+    "show_overlay_school",
+    "show_overlay_library",
+    "show_overlay_academy",
+    "show_overlay_health",
+    "show_overlay_barber",
+    "show_overlay_bathhouse",
+    "show_overlay_clinic",
+    "show_overlay_hospital",
+    "show_overlay_sickness",
+    "show_overlay_logistics",
+    "show_overlay_food_stocks",
+    "show_overlay_efficiency",
+    "show_overlay_mothball",
+    "show_overlay_tax_income",
+    "show_overlay_levy",
+    "show_overlay_employment",
+    "show_overlay_religion",
+    "show_overlay_desirability",
+    "show_overlay_sentiment",
+    "show_overlay_roads",
+    "rotate_map_north",
+    "build_wheat_farm",
+    "show_empire_map",
+    "show_messages",
+    "show_overlay_native",
+    "build_highway"
 };
 
 static struct {
@@ -135,6 +176,12 @@ static void init_defaults(void)
     set_mapping(KEY_TYPE_PAGEUP, KEY_MOD_NONE, HOTKEY_INCREASE_GAME_SPEED);
     set_mapping(KEY_TYPE_HOME, KEY_MOD_NONE, HOTKEY_ROTATE_MAP_LEFT);
     set_mapping(KEY_TYPE_END, KEY_MOD_NONE, HOTKEY_ROTATE_MAP_RIGHT);
+    set_mapping(KEY_TYPE_MOUSE_SCROLL_UP, KEY_MOD_NONE, HOTKEY_ZOOM_IN);
+    set_mapping(KEY_TYPE_MOUSE_SCROLL_DOWN, KEY_MOD_NONE, HOTKEY_ZOOM_OUT);
+    set_mapping(KEY_TYPE_MIDDLE_MOUSE_BUTTON, KEY_MOD_NONE, HOTKEY_RESET_ZOOM);
+    set_layout_mapping("R", KEY_TYPE_R, KEY_MOD_NONE, HOTKEY_ROTATE_BUILDING);
+    set_layout_mapping("Q", KEY_TYPE_Q, KEY_MOD_NONE, HOTKEY_BUILD_CLONE);
+    set_layout_mapping("X", KEY_TYPE_X, KEY_MOD_NONE, HOTKEY_MOTHBALL_TOGGLE);
     set_mapping(KEY_TYPE_1, KEY_MOD_NONE, HOTKEY_SHOW_ADVISOR_LABOR);
     set_mapping(KEY_TYPE_2, KEY_MOD_NONE, HOTKEY_SHOW_ADVISOR_MILITARY);
     set_mapping(KEY_TYPE_3, KEY_MOD_NONE, HOTKEY_SHOW_ADVISOR_IMPERIAL);
@@ -186,6 +233,7 @@ static void init_defaults(void)
     set_mapping(KEY_TYPE_F12, KEY_MOD_NONE, HOTKEY_SAVE_SCREENSHOT);
     set_mapping(KEY_TYPE_F12, KEY_MOD_ALT, HOTKEY_SAVE_SCREENSHOT); // mac specific
     set_mapping(KEY_TYPE_F12, KEY_MOD_CTRL, HOTKEY_SAVE_CITY_SCREENSHOT);
+    set_mapping(KEY_TYPE_F12, KEY_MOD_SHIFT, HOTKEY_SAVE_MINIMAP_SCREENSHOT);
 }
 
 const hotkey_mapping *hotkey_for_action(hotkey_action action, int index)
@@ -204,7 +252,7 @@ const hotkey_mapping *hotkey_for_action(hotkey_action action, int index)
 
 const hotkey_mapping *hotkey_default_for_action(hotkey_action action, int index)
 {
-    if (index < 0 || index >= 2 || (int) action < 0 || action >= HOTKEY_MAX_ITEMS) {
+    if (index < 0 || index >= 2 || action >= HOTKEY_MAX_ITEMS) {
         return 0;
     }
     return &data.default_mappings[action][index];
@@ -244,7 +292,8 @@ static void load_file(void)
     }
     char line_buffer[MAX_LINE];
     char *line;
-    while ((line = fgets(line_buffer, MAX_LINE, fp))) {
+    int version = HOTKEY_CONFIG_UNVERSIONED;
+    while ((line = fgets(line_buffer, MAX_LINE, fp)) != 0) {
         // Remove newline from string
         size_t size = strlen(line);
         while (size > 0 && (line[size - 1] == '\n' || line[size - 1] == '\r')) {
@@ -258,16 +307,29 @@ static void load_file(void)
         char *value = &equals[1];
         for (int i = 0; i < HOTKEY_MAX_ITEMS; i++) {
             if (strcmp(ini_keys[i], line) == 0) {
-                hotkey_mapping mapping;
-                if (key_combination_from_name(value, &mapping.key, &mapping.modifiers)) {
-                    mapping.action = i;
-                    hotkey_config_add_mapping(&mapping);
+                if (strcmp("version", line) == 0) {
+                    version = atoi(value);
+                } else {
+                    hotkey_mapping mapping;
+                    if (key_combination_from_name(value, &mapping.key, &mapping.modifiers)) {
+                        mapping.action = i;
+                        hotkey_config_add_mapping(&mapping);
+                    }
                 }
                 break;
             }
         }
     }
     file_close(fp);
+    if (data.num_mappings == 0) {
+        return;
+    }
+    if (version < HOTKEY_CONFIG_ZOOM && !hotkey_for_action(HOTKEY_ZOOM_IN, 0) &&
+        !hotkey_for_action(HOTKEY_ZOOM_OUT, 0) && !hotkey_for_action(HOTKEY_RESET_ZOOM, 0)) {
+        hotkey_config_add_mapping(hotkey_default_for_action(HOTKEY_ZOOM_IN, 0));
+        hotkey_config_add_mapping(hotkey_default_for_action(HOTKEY_ZOOM_OUT, 0));
+        hotkey_config_add_mapping(hotkey_default_for_action(HOTKEY_RESET_ZOOM, 0));
+    }
 }
 
 void hotkey_config_load(void)
@@ -288,6 +350,7 @@ void hotkey_config_save(void)
         log_error("Unable to write hotkey configuration file", INI_FILENAME, 0);
         return;
     }
+    fprintf(fp, "version=%d\n", HOTKEY_CURRENT_VERSION);
     for (int i = 0; i < data.num_mappings; i++) {
         const char *key_name = key_combination_name(data.mappings[i].key, data.mappings[i].modifiers);
         fprintf(fp, "%s=%s\n", ini_keys[data.mappings[i].action], key_name);

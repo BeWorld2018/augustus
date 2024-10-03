@@ -12,9 +12,19 @@ typedef struct {
     int y;
 } view_tile, pixel_offset;
 
+typedef struct {
+    int x;
+    int y;
+    int width;
+    int height;
+} pixel_area;
+
 typedef void (map_callback)(int x, int y, int grid_offset);
 
 void city_view_init(void);
+
+void city_view_set_custom_lookup(int start_offset, int width, int height, int border_size);
+void city_view_restore_lookup(void);
 
 int city_view_orientation(void);
 
@@ -24,13 +34,15 @@ int city_view_get_scale(void);
 void city_view_set_scale(int scale);
 
 int city_view_get_max_scale(void);
-void city_view_set_max_scale(int scale);
 
 void city_view_get_camera(int *x, int *y);
+void city_view_get_camera_absolute(int *x_abs, int *y_abs);
 void city_view_get_pixel_offset(int *x, int *y);
 void city_view_get_camera_in_pixels(int *x, int *y);
 
+void city_view_adjust_camera_from_obstruction(int grid_offset, int size, const pixel_area *obstruction);
 void city_view_set_camera(int x, int y);
+void city_view_set_camera_absolute(int x_abs, int y_abs);
 
 void city_view_set_camera_from_pixel_position(int x, int y);
 
@@ -54,8 +66,7 @@ void city_view_rotate_right(void);
 
 void city_view_set_viewport(int screen_width, int screen_height);
 
-void city_view_get_scaled_viewport(int *x, int *y, int *width, int *height);
-void city_view_get_unscaled_viewport(int *x, int *y, int *width, int *height);
+void city_view_get_viewport(int *x, int *y, int *width, int *height);
 void city_view_get_viewport_size_tiles(int *width, int *height);
 
 int city_view_is_sidebar_collapsed(void);
@@ -72,9 +83,9 @@ void city_view_save_scenario_state(buffer *camera);
 
 void city_view_load_scenario_state(buffer *camera);
 
-void city_view_foreach_map_tile(map_callback *callback);
+void city_view_foreach_valid_map_tile(map_callback *callback);
 
-void city_view_foreach_valid_map_tile(map_callback *callback1, map_callback *callback2, map_callback *callback3);
+void city_view_foreach_valid_map_tile_row(map_callback *callback1, map_callback *callback2, map_callback *callback3);
 
 void city_view_foreach_tile_in_range(int grid_offset, int size, int radius, map_callback *callback);
 

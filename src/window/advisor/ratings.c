@@ -3,8 +3,10 @@
 #include "city/ratings.h"
 #include "core/calc.h"
 #include "core/config.h"
+#include "core/lang.h"
 #include "graphics/generic_button.h"
 #include "graphics/image.h"
+#include "graphics/image_button.h"
 #include "graphics/lang_text.h"
 #include "graphics/panel.h"
 #include "graphics/text.h"
@@ -23,7 +25,7 @@ static generic_button rating_buttons[] = {
     {440, 286, 110, 66, button_rating, button_none, SELECTED_RATING_FAVOR, 0},
 };
 
-static int focus_button_id;
+static unsigned int focus_button_id;
 
 void draw_rating_column(int x_offset, int y_offset, int value, int has_reached)
 {
@@ -34,19 +36,19 @@ void draw_rating_column(int x_offset, int y_offset, int value, int has_reached)
         value_to_draw = 25;
     }
 
-    image_draw(image_base, x_offset, y);
+    image_draw(image_base, x_offset, y, COLOR_MASK_NONE, SCALE_NONE);
     for (int i = 0; i < 2 * value_to_draw; i++) {
-        image_draw(image_base + 1, x_offset + 11, --y);
+        image_draw(image_base + 1, x_offset + 11, --y, COLOR_MASK_NONE, SCALE_NONE);
     }
     if (has_reached) {
-        image_draw(image_base + 2, x_offset - 6, y);
+        image_draw(image_base + 2, x_offset - 6, y, COLOR_MASK_NONE, SCALE_NONE);
     }
 }
 
 static int draw_background(void)
 {
     outer_panel_draw(0, 0, 40, ADVISOR_HEIGHT);
-    image_draw(image_group(GROUP_ADVISOR_ICONS) + 3, 10, 10);
+    image_draw(image_group(GROUP_ADVISOR_ICONS) + 3, 10, 10, COLOR_MASK_NONE, SCALE_NONE);
     int width = lang_text_draw(53, 0, 60, 12, FONT_LARGE_BLACK);
     if (!scenario_criteria_population_enabled() || scenario_is_open_play()) {
         lang_text_draw(53, 7, 80 + width, 17, FONT_NORMAL_BLACK);
@@ -55,7 +57,7 @@ static int draw_background(void)
         text_draw_number(scenario_criteria_population(), '@', ")", 80 + width, 17, FONT_NORMAL_BLACK, 0);
     }
 
-    image_draw(image_group(GROUP_RATINGS_BACKGROUND), 60, 48);
+    image_draw(image_group(GROUP_RATINGS_BACKGROUND), 60, 48, COLOR_MASK_NONE, SCALE_NONE);
 
     int open_play = scenario_is_open_play();
 
@@ -113,7 +115,7 @@ static int draw_background(void)
         case SELECTED_RATING_CULTURE:
             lang_text_draw(53, 1, 72, 359, FONT_NORMAL_WHITE);
             if (culture <= 90) {
-                lang_text_draw_multiline(53, 9 + city_rating_selected_explanation(),
+                lang_text_draw_multiline(53, 9 + city_rating_explanation_for(SELECTED_RATING_CULTURE),
                     72, 374, 496, FONT_NORMAL_WHITE);
             } else {
                 lang_text_draw_multiline(53, 50, 72, 374, 496, FONT_NORMAL_WHITE);
@@ -124,7 +126,7 @@ static int draw_background(void)
             int line_width;
             lang_text_draw(53, 2, 72, 359, FONT_NORMAL_WHITE);
             if (prosperity <= 90) {
-                line_width = lang_text_draw_multiline(53, 16 + city_rating_selected_explanation(),
+                line_width = lang_text_draw_multiline(53, 16 + city_rating_explanation_for(SELECTED_RATING_PROSPERITY),
                     72, 374, 496, FONT_NORMAL_WHITE);
             } else {
                 line_width = lang_text_draw_multiline(53, 51, 72, 374, 496, FONT_NORMAL_WHITE);
@@ -132,7 +134,7 @@ static int draw_background(void)
             if (config_get(CONFIG_UI_SHOW_MAX_PROSPERITY)) {
                 int max = calc_bound(city_ratings_prosperity_max(), 0, 100);
                 if (prosperity < max) {
-                    int width = lang_text_draw(CUSTOM_TRANSLATION, TR_ADVISOR_MAX_ATTAINABLE_PROSPERITY_IS, 72, 374 + line_width, FONT_NORMAL_WHITE);
+                    width = lang_text_draw(CUSTOM_TRANSLATION, TR_ADVISOR_MAX_ATTAINABLE_PROSPERITY_IS, 72, 374 + line_width, FONT_NORMAL_WHITE);
                     text_draw_number(max, 0, ".", 72 + width, 374 + line_width, FONT_NORMAL_WHITE, 0);
                 }
             }
@@ -141,7 +143,7 @@ static int draw_background(void)
         case SELECTED_RATING_PEACE:
             lang_text_draw(53, 3, 72, 359, FONT_NORMAL_WHITE);
             if (peace <= 90) {
-                lang_text_draw_multiline(53, 41 + city_rating_selected_explanation(),
+                lang_text_draw_multiline(53, 41 + city_rating_explanation_for(SELECTED_RATING_PEACE),
                     72, 374, 496, FONT_NORMAL_WHITE);
             } else {
                 lang_text_draw_multiline(53, 52, 72, 374, 496, FONT_NORMAL_WHITE);
@@ -150,7 +152,7 @@ static int draw_background(void)
         case SELECTED_RATING_FAVOR:
             lang_text_draw(53, 4, 72, 359, FONT_NORMAL_WHITE);
             if (favor <= 90) {
-                lang_text_draw_multiline(53, 27 + city_rating_selected_explanation(),
+                lang_text_draw_multiline(53, 27 + city_rating_explanation_for(SELECTED_RATING_FAVOR),
                     72, 374, 496, FONT_NORMAL_WHITE);
             } else {
                 lang_text_draw_multiline(53, 53, 72, 374, 496, FONT_NORMAL_WHITE);

@@ -35,8 +35,8 @@ static arrow_button arrow_buttons[] = {
 };
 
 static struct {
-    int focus_button_id;
-    int focus_arrow_button_id;
+    unsigned int focus_button_id;
+    unsigned int focus_arrow_button_id;
 } data;
 
 static void draw_background(void)
@@ -46,7 +46,7 @@ static void draw_background(void)
     graphics_in_dialog();
 
     outer_panel_draw(64, 160, 32, 10);
-    image_draw(image_group(GROUP_RESOURCE_ICONS) + RESOURCE_DENARII, 80, 176);
+    image_draw(resource_get_data(RESOURCE_DENARII)->image.icon, 80, 176, COLOR_MASK_NONE, SCALE_NONE);
     lang_text_draw_centered(52, 16, 112, 176, 448, FONT_LARGE_BLACK);
 
     inner_panel_draw(112, 208, 26, 4);

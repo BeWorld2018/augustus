@@ -5,7 +5,7 @@
 #include "building/market.h"
 #include "building/storage.h"
 #include "building/warehouse.h"
-#include "city/buildings.h"
+#include "city/health.h"
 #include "city/trade.h"
 #include "core/calc.h"
 #include "core/config.h"
@@ -19,6 +19,7 @@
 #include "figure/route.h"
 #include "figure/trader.h"
 #include "figuretype/trader.h"
+#include "game/resource.h"
 #include "map/road_access.h"
 
 #define INFINITE 10000
@@ -55,7 +56,8 @@ static int try_import_resource(int building_id, int resource, int city_id)
     for (int i = 0; i < 8; i++) {
         space = building_next(space);
         if (space->id > 0) {
-            if (space->loads_stored && space->loads_stored < 4 && space->subtype.warehouse_resource_id == resource) {
+            if (space->resources[resource] > 0 && space->resources[resource] < 4 &&
+                space->subtype.warehouse_resource_id == resource) {
                 trade_route_increase_traded(route_id, resource);
                 building_warehouse_space_add_import(space, resource, 0);
                 return 1;
@@ -100,7 +102,7 @@ static int try_export_resource(int building_id, int resource, int city_id)
     for (int i = 0; i < 8; i++) {
         space = building_next(space);
         if (space->id > 0) {
-            if (space->loads_stored && space->subtype.warehouse_resource_id == resource) {
+            if (space->resources[resource] > 0) {
                 trade_route_increase_traded(empire_city_get_route_id(city_id), resource);
                 building_warehouse_space_remove_export(space, resource, 0);
                 return 1;
@@ -121,7 +123,7 @@ static int store_destination_map_point(int building_id, map_point *dst)
         map_point_store_result(b->x + 1, b->y + 1, dst);
     } else if (b->has_road_access == 1) {
         map_point_store_result(b->x, b->y, dst);
-    } else if (!map_has_road_access(b->x, b->y, 3, dst)) {
+    } else if (!map_has_road_access_rotation(b->subtype.orientation, b->x, b->y, 3, dst)) {
         return 0;
     }
     return 1;
@@ -140,10 +142,10 @@ static int get_closest_building_for_import(int x, int y, int city_id, building *
 {
     int resource = *import_resource;
     if (resource == RESOURCE_NONE) {
-        int importable[16];
+        int importable[RESOURCE_MAX];
         importable[RESOURCE_NONE] = 0;
         for (int r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
-            importable[r] = building_distribution_is_good_accepted(r - 1, dock) &&
+            importable[r] = building_distribution_is_good_accepted(r, dock) &&
                 empire_can_import_resource_from_city(city_id, r);
         }
         resource = city_trade_next_docker_import_resource();
@@ -169,7 +171,7 @@ static int get_closest_building_for_import(int x, int y, int city_id, building *
             if (space->id && space->subtype.warehouse_resource_id == RESOURCE_NONE) {
                 distance_penalty -= 8;
             }
-            if (space->id && space->subtype.warehouse_resource_id == resource && space->loads_stored < 4) {
+            if (space->id && space->subtype.warehouse_resource_id == resource && space->resources[resource] < 4) {
                 distance_penalty -= 4;
             }
         }
@@ -189,7 +191,7 @@ static int get_closest_building_for_import(int x, int y, int city_id, building *
             if (is_invalid_destination(b, dock) ||
                 building_storage_get(b->storage_id)->empty_all ||
                 building_granary_is_not_accepting(resource, b) ||
-                building_granary_is_full(resource, b)) {
+                building_granary_is_full(b)) {
                 continue;
             }
             // always prefer granary
@@ -212,10 +214,10 @@ static int get_closest_building_for_export(int x, int y, int city_id, building *
 {
     int resource = *export_resource;
     if (resource == RESOURCE_NONE) {
-        int exportable[16];
+        int exportable[RESOURCE_MAX];
         exportable[RESOURCE_NONE] = 0;
         for (int r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
-            exportable[r] = building_distribution_is_good_accepted(r - 1, dock) &&
+            exportable[r] = building_distribution_is_good_accepted(r, dock) &&
                 empire_can_export_resource_to_city(city_id, r);
         }
         resource = city_trade_next_docker_export_resource();
@@ -236,7 +238,7 @@ static int get_closest_building_for_export(int x, int y, int city_id, building *
         building *space = b;
         for (int s = 0; s < 8; s++) {
             space = building_next(space);
-            if (space->id && space->subtype.warehouse_resource_id == resource && space->loads_stored > 0) {
+            if (space->id && space->subtype.warehouse_resource_id == resource && space->resources[resource] > 0) {
                 distance_penalty--;
             }
         }
@@ -342,8 +344,7 @@ static int fetch_export_resource(figure *f, building *dock, int add_to_bought)
 
 static void set_cart_graphic(figure *f)
 {
-    f->cart_image_id = image_group(GROUP_FIGURE_CARTPUSHER_CART) + 8 * f->resource_id;
-    f->cart_image_id += resource_image_offset(f->resource_id, RESOURCE_IMAGE_CART);
+    f->cart_image_id = resource_get_data(f->resource_id)->image.cart.single_load;
 }
 
 static void set_docker_as_idle(figure *f)
@@ -357,6 +358,7 @@ static void set_docker_as_idle(figure *f)
 void figure_docker_action(figure *f)
 {
     building *b = building_get(f->building_id);
+
     figure_image_increase_offset(f, 12);
     f->cart_image_id = 0;
     if (b->state != BUILDING_STATE_IN_USE) {
@@ -376,7 +378,7 @@ void figure_docker_action(figure *f)
             b->data.dock.trade_ship_id = 0;
         }
     }
-    f->terrain_usage = TERRAIN_USAGE_ROADS;
+    f->terrain_usage = TERRAIN_USAGE_ROADS_HIGHWAY;
     switch (f->action_state) {
         case FIGURE_ACTION_150_ATTACK:
             figure_combat_handle_attack(f);
@@ -410,8 +412,8 @@ void figure_docker_action(figure *f)
             } else {
                 int has_queued_docker = 0;
                 for (int i = 0; i < 3; i++) {
-                    if (b->data.dock.docker_ids[i]) {
-                        figure *docker = figure_get(b->data.dock.docker_ids[i]);
+                    if (b->data.distribution.cartpusher_ids[i]) {
+                        figure *docker = figure_get(b->data.distribution.cartpusher_ids[i]);
                         if (docker->id == b->data.dock.queued_docker_id && docker->state == FIGURE_STATE_ALIVE) {
                             if (docker->action_state == FIGURE_ACTION_133_DOCKER_IMPORT_QUEUE ||
                                 docker->action_state == FIGURE_ACTION_134_DOCKER_EXPORT_QUEUE) {
@@ -525,6 +527,8 @@ void figure_docker_action(figure *f)
                 if (try_import_resource(f->destination_building_id, f->resource_id, trade_city_id)) {
                     int trader_id = figure_get(b->data.dock.trade_ship_id)->trader_id;
                     trader_record_sold_resource(trader_id, f->resource_id);
+                    city_health_update_sickness_level_in_building(b->id);
+                    city_health_dispatch_sickness(f);
                     f->action_state = FIGURE_ACTION_138_DOCKER_IMPORT_RETURNING;
                     f->wait_ticks = 0;
                     f->destination_x = f->source_x;
@@ -557,6 +561,8 @@ void figure_docker_action(figure *f)
                 if (try_export_resource(f->destination_building_id, f->resource_id, trade_city_id)) {
                     int trader_id = figure_get(b->data.dock.trade_ship_id)->trader_id;
                     trader_record_bought_resource(trader_id, f->resource_id);
+                    city_health_update_sickness_level_in_building(b->id);
+                    city_health_dispatch_sickness(f);
                     f->action_state = FIGURE_ACTION_137_DOCKER_EXPORT_RETURNING;
                 } else {
                     fetch_export_resource(f, b, 1);

@@ -34,22 +34,22 @@ static generic_button buttons[] = {
     {20, 0, 0, 0, button_select_option, button_none, 4, 0}
 };
 
-static scrollbar_type scrollbar = { 420, START_Y_OFFSET + 40, 0, on_scroll, 4 };
+static scrollbar_type scrollbar = { 420, START_Y_OFFSET + 40, 0, 400, 0, on_scroll, 0, 4 };
 
 static struct {
     int title;
     int subtitle;
     option_menu_item *options;
-    int num_options;
+    unsigned int num_options;
     int width_blocks;
     int height_blocks;
     void (*close_func)(int selection);
-    int focus_button_id;
-    int original_option;
-    int selected_option;
+    unsigned int focus_button_id;
+    unsigned int original_option;
+    unsigned int selected_option;
     int price;
-    int visible_options;
-    int scroll_position;
+    unsigned int visible_options;
+    unsigned int scroll_position;
     int height;
     option_menu_row_size row_size;
 } data;
@@ -79,8 +79,8 @@ static int init(int title, int subtitle, option_menu_item *options, int num_opti
     }
 
     if (!border_image_ids[0]) {
-        border_image_ids[0] = assets_get_image_id("UI_Elements", "Policy Selection Borders");
-        border_image_ids[1] = assets_get_image_id("UI_Elements", "Monument Mod Selection Borders");
+        border_image_ids[0] = assets_get_image_id("UI", "Image Border Medium");
+        border_image_ids[1] = assets_get_image_id("UI", "Image Border Large");
     }
     return 1;
 }
@@ -101,7 +101,8 @@ static void calculate_visible_options(void)
     buttons[2].width = buttons[3].width = buttons[4].width = data.num_options == data.visible_options ? 430 : 400;
 
     scrollbar.height = Y_OFFSET_PER_OPTION[data.row_size] * data.visible_options;
-    scrollbar_init(&scrollbar, 0, data.num_options - data.visible_options);
+    scrollbar.elements_in_view =  data.visible_options;
+    scrollbar_init(&scrollbar, 0, data.num_options);
     if (data.selected_option > data.visible_options) {
         scrollbar.scroll_position = data.selected_option - data.visible_options;
     }
@@ -128,7 +129,7 @@ static void draw_background(void)
     outer_panel_draw(0, 0, data.width_blocks, data.height_blocks);
 
     text_draw_centered(translation_for(data.title), 0, 20, 480, FONT_LARGE_BLACK, 0);
-    text_draw_multiline(translation_for(data.subtitle), 20, 60, 440, FONT_NORMAL_BLACK, 0);
+    text_draw_multiline(translation_for(data.subtitle), 20, 60, 440, 0, FONT_NORMAL_BLACK, 0);
     if (data.price) {
         text_draw_with_money(translation_for(TR_OPTION_MENU_COST), data.price, " ", ".",
             20, 110, 0, FONT_NORMAL_BLACK, 0);
@@ -136,12 +137,13 @@ static void draw_background(void)
 
     int y_offset = START_Y_OFFSET;
 
-    for (int i = 0; i < data.visible_options; i++) {
+    for (unsigned int i = 0; i < data.visible_options; i++) {
         int text_width = data.num_options == data.visible_options ? 448 : 400;
         int text_x = 20;
 
         if (data.options[i + scrollbar.scroll_position].image_id) {
-            image_draw(data.options[i + scrollbar.scroll_position].image_id, text_x, y_offset + 42);
+            image_draw(data.options[i + scrollbar.scroll_position].image_id, text_x, y_offset + 42,
+                COLOR_MASK_NONE, SCALE_NONE);
             int offset = data.row_size == OPTION_MENU_SMALL_ROW ? 128 : 160;
             text_x += offset;
             text_width -= offset;
@@ -152,10 +154,10 @@ static void draw_background(void)
                 Y_OFFSET_PER_OPTION[data.row_size] / 16 - 1);
         }
         text_draw_multiline(translation_for(data.options[i + scrollbar.scroll_position].header),
-            text_x, y_offset + 49, text_width - 4,
+            text_x, y_offset + 49, text_width - 8, 0,
             data.selected_option == i + scrollbar.scroll_position + 1 ? FONT_NORMAL_WHITE : FONT_NORMAL_BLACK, 0);
         text_draw_multiline(translation_for(data.options[i + scrollbar.scroll_position].desc),
-            text_x, y_offset + 69, text_width - 4,
+            text_x, y_offset + 69, text_width - 8, 0,
             data.selected_option == i + scrollbar.scroll_position + 1 ? FONT_NORMAL_WHITE : FONT_NORMAL_BLACK, 0);
 
 
@@ -169,27 +171,13 @@ static void draw_background(void)
     graphics_reset_dialog();
 }
 
-static void draw_option_image_border(int x, int y, int focused)
-{
-    if (data.row_size == OPTION_MENU_SMALL_ROW) {
-        image_draw(border_image_ids[0] + focused, x, y);
-        image_draw(border_image_ids[0] + 2 + focused, x + 105, y + 5);
-        image_draw(border_image_ids[0] + 4 + focused, x, y + 90);
-        image_draw(border_image_ids[0] + 6 + focused, x, y + 5);
-    } else {
-        image_draw(border_image_ids[1] + focused, x, y);
-        image_draw(border_image_ids[1] + 2 + focused, x + 146, y + 5);
-        image_draw(border_image_ids[1] + 4 + focused, x, y + 126);
-        image_draw(border_image_ids[1] + 6 + focused, x, y + 5);
-    }
-}
-
 static void draw_foreground(void)
 {
     graphics_in_dialog_with_size(16 * data.width_blocks, 16 * data.height_blocks);
-    for (int i = 0; i < data.visible_options; i++) {
+    for (unsigned int i = 0; i < data.visible_options; i++) {
         if (data.options[i + scrollbar.scroll_position].image_id) {
-            draw_option_image_border(20, buttons[i + 2].y + 2, data.focus_button_id == i + 3);
+            color_t color = data.focus_button_id == i + 3 ? COLOR_BORDER_RED : COLOR_BORDER_GREEN;
+            image_draw_border(border_image_ids[data.row_size], 20, buttons[i + 2].y + 2, color);
         }
     }
 
@@ -211,14 +199,14 @@ static void handle_input(const mouse *m, const hotkeys *h)
     if (input_go_back_requested(m, h)) {
         data.close_func(0);
         window_go_back();
+        return;
     }
     const mouse *m_dialog = mouse_in_dialog_with_size(m, data.width_blocks * 16, data.height_blocks * 16);
-    if (scrollbar_handle_mouse(&scrollbar, m_dialog)) {
+    if (scrollbar_handle_mouse(&scrollbar, m_dialog, 1)) {
+        data.focus_button_id = 0;
         return;
     }
-    if (generic_buttons_handle_mouse(m_dialog, 0, 0, buttons, data.visible_options + 2, &data.focus_button_id)) {
-        return;
-    }
+    generic_buttons_handle_mouse(m_dialog, 0, 0, buttons, data.visible_options + 2, &data.focus_button_id);
 }
 
 static void on_scroll(void)

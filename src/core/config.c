@@ -1,5 +1,6 @@
 #include "config.h"
 
+#include "core/dir.h"
 #include "core/file.h"
 #include "core/log.h"
 
@@ -9,6 +10,7 @@
 #define MAX_LINE 100
 
 static const char *INI_FILENAME = "augustus.ini";
+static int needs_user_directory_setup;
 
 // Keep this in the same order as the config_keys in config.h
 static const char *ini_keys[] = {
@@ -16,7 +18,7 @@ static const char *ini_keys[] = {
     "master_volume",
     "enable_audio_in_videos",
     "video_volume",
-    "ui_walker_waypoints",
+    "has_set_user_directories",
     "gameplay_fix_immigration",
     "gameplay_fix_100y_ghosts",
     "screen_display_scale",
@@ -29,13 +31,23 @@ static const char *ini_keys[] = {
     "ui_visual_feedback_on_delete",
     "ui_allow_cycling_temples",
     "ui_show_water_structure_range",
+    "ui_show_water_structure_range_houses",
+    "ui_show_market_range",
     "ui_show_construction_size",
-    "ui_zoom",
     "ui_highlight_legions",
     "ui_show_military_sidebar",
     "ui_disable_map_drag",
     "ui_show_max_prosperity",
     "ui_digit_separator",
+    "ui_inverse_map_drag",
+    "ui_message_alerts",
+    "ui_show_grid",
+    "ui_show_partial_grid_around_construction",
+    "ui_always_show_rotation_buttons",
+    "ui_show_roaming_path",
+    "ui_draw_cloud_shadows",
+    "ui_display_fps",
+    "ui_ask_confirmation_on_file_overwrite",
     "gameplay_change_max_grand_temples",
     "gameplay_change_jealous_gods",
     "gameplay_change_global_labour",
@@ -57,10 +69,15 @@ static const char *ini_keys[] = {
     "gameplay_change_monuments_boost_culture_rating",
     "gameplay_change_disable_infinite_wolves_spawning",
     "gameplay_change_romers_dont_skip_corners",
+    "gameplay_change_yearly_autosave",
+    "gameplay_change_auto_kill_animals",
+    "gameplay_change_nonmilitary_gates_allow_walkers",
+    "ui_show_speedrun_info",
+    "ui_show_desirability_range",
 };
 
 static const char *ini_string_keys[] = {
-    "ui_language_dir"
+    "ui_language_dir",
 };
 
 static int values[CONFIG_MAX_ENTRIES];
@@ -71,18 +88,20 @@ static int default_values[CONFIG_MAX_ENTRIES] = {
     [CONFIG_GENERAL_MASTER_VOLUME] = 100,
     [CONFIG_GENERAL_ENABLE_VIDEO_SOUND] = 1,
     [CONFIG_GENERAL_VIDEO_VOLUME] = 100,
+    [CONFIG_GENERAL_HAS_SET_USER_DIRECTORIES] = 1,
     [CONFIG_UI_SIDEBAR_INFO] = 1,
     [CONFIG_UI_SMOOTH_SCROLLING] = 1,
-    [CONFIG_UI_ZOOM] = 1,
     [CONFIG_UI_SHOW_WATER_STRUCTURE_RANGE] = 1,
     [CONFIG_UI_SHOW_CONSTRUCTION_SIZE] = 1,
     [CONFIG_UI_HIGHLIGHT_LEGIONS] = 1,
+    [CONFIG_UI_ASK_CONFIRMATION_ON_FILE_OVERWRITE] = 1,
     [CONFIG_SCREEN_DISPLAY_SCALE] = 100,
     [CONFIG_SCREEN_CURSOR_SCALE] = 100,
-    [CONFIG_GP_CH_MAX_GRAND_TEMPLES] = 2
+    [CONFIG_GP_CH_MAX_GRAND_TEMPLES] = 2,    
+    [CONFIG_UI_SHOW_DESIRABILITY_RANGE] = 0,
 };
 
-static const char default_string_values[CONFIG_STRING_MAX_ENTRIES][CONFIG_STRING_VALUE_MAX];
+static const char default_string_values[CONFIG_STRING_MAX_ENTRIES][CONFIG_STRING_VALUE_MAX] = { 0 };
 
 int config_get(config_key key)
 {
@@ -104,7 +123,7 @@ void config_set_string(config_string_key key, const char *value)
     if (!value) {
         string_values[key][0] = 0;
     } else {
-        strncpy(string_values[key], value, CONFIG_STRING_VALUE_MAX - 1);
+        snprintf(string_values[key], CONFIG_STRING_VALUE_MAX, "%s", value);
     }
 }
 
@@ -123,20 +142,29 @@ static void set_defaults(void)
     for (int i = 0; i < CONFIG_MAX_ENTRIES; ++i) {
         values[i] = default_values[i];
     }
-    strncpy(string_values[CONFIG_STRING_UI_LANGUAGE_DIR],
-        default_string_values[CONFIG_STRING_UI_LANGUAGE_DIR], CONFIG_STRING_VALUE_MAX);
+    snprintf(string_values[CONFIG_STRING_UI_LANGUAGE_DIR], CONFIG_STRING_VALUE_MAX, "%s",
+        default_string_values[CONFIG_STRING_UI_LANGUAGE_DIR]);
 }
 
 void config_load(void)
 {
     set_defaults();
-    FILE *fp = file_open(INI_FILENAME, "rt");
+    needs_user_directory_setup = 1;
+    const char *file_name = dir_get_file_at_location(INI_FILENAME, PATH_LOCATION_CONFIG);
+    if (!file_name) {
+        return;
+    }
+    FILE *fp = file_open(file_name, "rt");
     if (!fp) {
         return;
     }
+    // Override default, if value is the same at end, then we never setup the directories
+    needs_user_directory_setup = 0;
+    values[CONFIG_GENERAL_HAS_SET_USER_DIRECTORIES] = -1;
+
     char line_buffer[MAX_LINE];
     char *line;
-    while ((line = fgets(line_buffer, MAX_LINE, fp))) {
+    while ((line = fgets(line_buffer, MAX_LINE, fp)) != 0) {
         // Remove newline from string
         size_t size = strlen(line);
         while (size > 0 && (line[size - 1] == '\n' || line[size - 1] == '\r')) {
@@ -158,18 +186,31 @@ void config_load(void)
                     const char *value = &equals[1];
                     log_info("Config key", ini_string_keys[i], 0);
                     log_info("Config value", value, 0);
-                    strncpy(string_values[i], value, CONFIG_STRING_VALUE_MAX - 1);
+                    snprintf(string_values[i], CONFIG_STRING_VALUE_MAX, "%s", value);
                     break;
                 }
             }
         }
     }
     file_close(fp);
+    if (values[CONFIG_GENERAL_HAS_SET_USER_DIRECTORIES] == -1) {
+        values[CONFIG_GENERAL_HAS_SET_USER_DIRECTORIES] = default_values[CONFIG_GENERAL_HAS_SET_USER_DIRECTORIES];
+        needs_user_directory_setup = 1;
+    }
+}
+
+int config_must_configure_user_directory(void)
+{
+    return needs_user_directory_setup;
 }
 
 void config_save(void)
 {
-    FILE *fp = file_open(INI_FILENAME, "wt");
+    const char *file_name = dir_append_location(INI_FILENAME, PATH_LOCATION_CONFIG);
+    if (!file_name) {
+        return;
+    }
+    FILE *fp = file_open(file_name, "wt");
     if (!fp) {
         log_error("Unable to write configuration file", INI_FILENAME, 0);
         return;
@@ -181,4 +222,5 @@ void config_save(void)
         fprintf(fp, "%s=%s\n", ini_string_keys[i], string_values[i]);
     }
     file_close(fp);
+    needs_user_directory_setup = 0;
 }

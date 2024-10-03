@@ -17,11 +17,13 @@
 #include "figure/formation_legion.h"
 #include "game/resource.h"
 #include "game/settings.h"
+#include "game/state.h"
 #include "graphics/arrow_button.h"
 #include "graphics/button.h"
 #include "graphics/generic_button.h"
 #include "graphics/graphics.h"
 #include "graphics/image.h"
+#include "graphics/image_button.h"
 #include "graphics/lang_text.h"
 #include "graphics/menu.h"
 #include "graphics/panel.h"
@@ -51,11 +53,16 @@
 #define REQUEST_MONTHS_LEFT_FOR_RED_WARNING 3
 
 static void button_game_speed(int is_down, int param2);
+static void button_toggle_play_paused(int param1, int param2);
 static void button_handle_request(int index, int param2);
 
 static arrow_button arrow_buttons_speed[] = {
     {11, 30, 17, 24, button_game_speed, 1, 0},
     {35, 30, 15, 24, button_game_speed, 0, 0},
+};
+
+static image_button play_paused_button = {
+    108, 29, 39, 26, IB_NORMAL, 0, 0, button_toggle_play_paused, button_none, 0, 0, 1, "UI", "Pause Button"
 };
 
 static generic_button buttons_emperor_requests[] = {
@@ -65,6 +72,8 @@ static generic_button buttons_emperor_requests[] = {
     {2, 172, 158, 20, button_handle_request, button_none, 3, 0},
     {2, 220, 158, 20, button_handle_request, button_none, 4, 0}
 };
+
+static const char *play_pause_button_image_names[] = { "Pause Button", "Play Button" };
 
 typedef struct {
     int value;
@@ -104,12 +113,13 @@ static struct {
         int angry;
     } gods;
     int next_invasion;
-    int visible_requests;
-    int active_requests;
+    unsigned int visible_requests;
+    unsigned int active_requests;
+    int objectives_y_offset;
     int request_buttons_y_offset;
-    int focused_request_button_id;
-    int selected_request_id;
-    int selected_resource;
+    unsigned int focused_request_button_id;
+    unsigned int selected_request_id;
+    unsigned int selected_resource;
     request requests[MAX_REQUESTS_TO_DISPLAY];
 } data;
 
@@ -119,7 +129,7 @@ static int count_active_requests(void)
     return count > MAX_REQUESTS_TO_DISPLAY ? MAX_REQUESTS_TO_DISPLAY : count;
 }
 
-int sort_requests(const void *va, const void *vb)
+static int sort_requests(const void *va, const void *vb)
 {
     return ((request *) va)->time - ((request *) vb)->time;
 }
@@ -202,7 +212,7 @@ static int calculate_extra_info_height(int available_height)
     }
     if (data.info_to_display & SIDEBAR_EXTRA_DISPLAY_REQUESTS) {
         height += EXTRA_INFO_HEIGHT_REQUESTS_MIN;
-        int num_requests = count_active_requests();
+        unsigned int num_requests = count_active_requests();
         data.visible_requests = 1;
         while (data.visible_requests < num_requests) {
             if (height + EXTRA_INFO_HEIGHT_REQUESTS_PANEL > available_height) {
@@ -246,7 +256,7 @@ static void set_extra_info_objectives(void)
 static int count_happy_gods(void)
 {
     int happy_gods = 0;
-    for (int god = 0; god < 5; god++) {
+    for (int god = 0; god < MAX_GODS; god++) {
         if (city_god_happy_bolts(god) > 0) {
             happy_gods++;
         }
@@ -315,7 +325,7 @@ static int update_extra_info(int is_background)
         changed |= update_extra_info_value(city_population(), &data.objectives.population.value);
     }
     if (data.info_to_display & SIDEBAR_EXTRA_DISPLAY_REQUESTS) {
-        int new_requests = update_extra_info_value(count_active_requests(), &data.active_requests);
+        int new_requests = update_extra_info_value(count_active_requests(), (int *)&data.active_requests);
 
         int troop_requests = city_request_has_troop_request();
         if (troop_requests) {
@@ -397,7 +407,7 @@ static int draw_request_buttons(int y_offset)
 
     y_offset += EXTRA_INFO_VERTICAL_PADDING;
 
-    for (int i = 0; i < data.visible_requests; i++) {
+    for (unsigned int i = 0; i < data.visible_requests; i++) {
         const request *r = &data.requests[i];
         int base_button_y_offset = i * EXTRA_INFO_HEIGHT_REQUESTS_PANEL;
 
@@ -413,11 +423,11 @@ static int draw_request_buttons(int y_offset)
         buttons_emperor_requests[i].height = 20;
         int width = data.x_offset + 10;
         if (r->resource == RESOURCE_TROOPS) {
-            int image_id = image_group(GROUP_RESOURCE_ICONS) + RESOURCE_WEAPONS;
+            int image_id = resource_get_data(RESOURCE_WEAPONS)->image.icon;
             const image *img = image_get(image_id);
             int image_y_offset = (EXTRA_INFO_LINE_SPACE - img->height) / 2;
 
-            image_draw(image_id, width, y_offset + image_y_offset - 2);
+            image_draw(image_id, width, y_offset + image_y_offset - 2, COLOR_MASK_NONE, SCALE_NONE);
 
             int force_text_offset = get_text_offset_for_force_size(r->amount);
 
@@ -430,13 +440,11 @@ static int draw_request_buttons(int y_offset)
             text_draw_centered(translation_for(TR_SIDEBAR_EXTRA_REQUESTS_SEND),
                 data.x_offset + 2, y_offset + 25, 158, FONT_NORMAL_GREEN, 0);
         } else {
-            int resource_offset = r->resource + resource_image_offset(r->resource, RESOURCE_IMAGE_ICON);
-
-            int image_id = image_group(GROUP_RESOURCE_ICONS) + resource_offset;
+            int image_id = resource_get_data(r->resource)->image.icon;
             const image *img = image_get(image_id);
             int image_y_offset = (EXTRA_INFO_LINE_SPACE - img->height) / 2;
 
-            image_draw(image_id, width, y_offset + image_y_offset);
+            image_draw(image_id, width, y_offset + image_y_offset, COLOR_MASK_NONE, SCALE_NONE);
 
             width += img->width + 6;
 
@@ -455,8 +463,8 @@ static int draw_request_buttons(int y_offset)
                 if (status) {
                     if (status == CITY_REQUEST_STATUS_NOT_ENOUGH_RESOURCES) {
                         if (is_stockpiled) {
-                            image_draw(assets_get_image_id("UI_Elements", "Store Icon"),
-                                data.x_offset + 5, y_offset + 10);
+                            image_draw(assets_get_image_id("UI", "Store Icon"),
+                                data.x_offset + 5, y_offset + 10, COLOR_MASK_NONE, SCALE_NONE);
                             text_draw_centered(translation_for(TR_SIDEBAR_EXTRA_REQUESTS_UNSTOCK),
                                 data.x_offset + 2, y_offset + 25, 158, FONT_NORMAL_GREEN, 0);
                         } else {
@@ -500,8 +508,8 @@ static int draw_request_buttons(int y_offset)
 static void draw_extra_info_panel(void)
 {
     int panel_blocks = data.height / BLOCK_SIZE;
-    graphics_draw_vertical_line(data.x_offset, data.y_offset, data.y_offset + data.height, COLOR_WHITE);
-    graphics_draw_vertical_line(data.x_offset + data.width - 1, data.y_offset,
+    graphics_draw_line(data.x_offset, data.x_offset, data.y_offset, data.y_offset + data.height, COLOR_WHITE);
+    graphics_draw_line(data.x_offset + data.width - 1, data.x_offset + data.width - 1, data.y_offset,
         data.y_offset + data.height, COLOR_SIDEBAR);
     inner_panel_draw(data.x_offset + 1, data.y_offset, data.width / BLOCK_SIZE, panel_blocks);
 
@@ -555,20 +563,22 @@ static void draw_extra_info_panel(void)
 
         font_t font_type = data.gods.angry > 0 ? FONT_NORMAL_RED : FONT_NORMAL_GREEN;
         int width = text_draw_number(data.gods.angry, 0, "", data.x_offset + 42, y_offset + 2, font_type, 0);
-        image_draw(image_group(GROUP_GOD_BOLT), data.x_offset + 42 + width, y_offset - 2);
+        image_draw(image_group(GROUP_GOD_BOLT), data.x_offset + 42 + width, y_offset - 2, COLOR_MASK_NONE, SCALE_NONE);
 
         static int happy_image_id;
         if (!happy_image_id) {
-            happy_image_id = assets_get_image_id("UI_Elements", "Happy God Icon");
+            happy_image_id = assets_get_image_id("UI", "Happy God Icon");
         }
         width = text_draw_number(data.gods.happy, 0, "", data.x_offset + 82, y_offset + 2, FONT_NORMAL_GREEN, 0);
-        image_draw(happy_image_id, data.x_offset + 82 + width, y_offset - 2);
+        image_draw(happy_image_id, data.x_offset + 82 + width, y_offset - 2, COLOR_MASK_NONE, SCALE_NONE);
 
         y_offset += EXTRA_INFO_VERTICAL_PADDING * 2;
     }
 
     if (data.info_to_display & SIDEBAR_EXTRA_DISPLAY_RATINGS) {
         y_offset += EXTRA_INFO_LINE_SPACE;
+
+        data.objectives_y_offset = y_offset;
 
         y_offset += draw_extra_info_objective(data.x_offset, y_offset, 53, 1, &data.objectives.culture, 0);
         y_offset += draw_extra_info_objective(data.x_offset, y_offset, 53, 2, &data.objectives.prosperity, 0);
@@ -617,11 +627,14 @@ static void draw_extra_info_buttons(void)
         draw_extra_info_panel();
     }
     if (data.info_to_display & SIDEBAR_EXTRA_DISPLAY_GAME_SPEED) {
+        if (!play_paused_button.pressed) {
+            play_paused_button.image_name = play_pause_button_image_names[game_state_is_paused()];
+        }
         arrow_buttons_draw(data.x_offset, data.y_offset, arrow_buttons_speed, 2);
+        image_buttons_draw(data.x_offset, data.y_offset, &play_paused_button, 1);
     }
     if (data.info_to_display & SIDEBAR_EXTRA_DISPLAY_REQUESTS && data.active_requests) {
-        for (int i = 0; i < data.visible_requests; i++) {
-
+        for (unsigned int i = 0; i < data.visible_requests; i++) {
             button_border_draw(data.x_offset + 2, data.request_buttons_y_offset + buttons_emperor_requests[i].y,
                 data.width - 4, buttons_emperor_requests[i].height, i == data.focused_request_button_id - 1);
         }
@@ -636,15 +649,66 @@ void sidebar_extra_draw_foreground(void)
 int sidebar_extra_handle_mouse(const mouse *m)
 {
     if ((data.info_to_display & SIDEBAR_EXTRA_DISPLAY_GAME_SPEED) &&
-        arrow_buttons_handle_mouse(m, data.x_offset, data.y_offset, arrow_buttons_speed, 2, 0)) {
+        (arrow_buttons_handle_mouse(m, data.x_offset, data.y_offset, arrow_buttons_speed, 2, 0) ||
+        image_buttons_handle_mouse(m, data.x_offset, data.y_offset, &play_paused_button, 1, 0))) {
         return 1;
     }
     if ((data.info_to_display & SIDEBAR_EXTRA_DISPLAY_REQUESTS) &&
         generic_buttons_handle_mouse(m, data.x_offset, data.request_buttons_y_offset,
-        buttons_emperor_requests, data.visible_requests, &data.focused_request_button_id)) {
+            buttons_emperor_requests, data.visible_requests, &data.focused_request_button_id)) {
         return 1;
     }
     return 0;
+}
+
+int sidebar_extra_get_tooltip(tooltip_context *c)
+{
+    if (!sidebar_extra_is_information_displayed(SIDEBAR_EXTRA_DISPLAY_RATINGS)) {
+        return 0;
+    }
+    const mouse *m = mouse_get();
+    if (m->x < data.x_offset + 2 || m->x >= data.x_offset + data.width - 2 ||  m->y < data.objectives_y_offset ||
+        m->y >= data.objectives_y_offset + EXTRA_INFO_LINE_SPACE * 8) {
+        return 0;
+    }
+    int text_id = 0;
+    selected_rating rating = (m->y - data.objectives_y_offset) / (EXTRA_INFO_LINE_SPACE * 2) + 1;
+    switch (rating) {
+        case SELECTED_RATING_CULTURE:
+            if (data.objectives.culture.value <= 90) {
+                text_id = 9 + city_rating_explanation_for(SELECTED_RATING_CULTURE);
+            } else {
+                text_id = 50;
+            }
+            break;
+        case SELECTED_RATING_PROSPERITY:
+        {
+            if (data.objectives.prosperity.value <= 90) {
+                text_id = 16 + city_rating_explanation_for(SELECTED_RATING_PROSPERITY);
+            } else {
+                text_id = 51;
+            }
+            break;
+        }
+        case SELECTED_RATING_PEACE:
+            if (data.objectives.peace.value <= 90) {
+                text_id = 41 + city_rating_explanation_for(SELECTED_RATING_PEACE);
+            } else {
+                text_id = 52;
+            }
+            break;
+        case SELECTED_RATING_FAVOR:
+            if (data.objectives.favor.value <= 90) {
+                text_id = 27 + city_rating_explanation_for(SELECTED_RATING_FAVOR);
+            } else {
+                text_id = 53;
+            }
+            break;
+        default:
+            return 0;
+    }
+    c->text_group = 53;
+    return text_id;
 }
 
 static void button_game_speed(int is_down, int param2)
@@ -655,6 +719,12 @@ static void button_game_speed(int is_down, int param2)
         setting_increase_game_speed();
     }
 }
+
+static void button_toggle_play_paused(int param1, int param2)
+{
+    game_state_toggle_paused();
+}
+
 
 static void confirm_nothing(int accepted, int checked)
 {}
@@ -679,7 +749,7 @@ static void confirm_send_goods(int accepted, int checked)
 
 static void button_handle_request(int index, int param2)
 {
-    if (data.active_requests > data.visible_requests && index == data.visible_requests - 1) {
+    if (data.active_requests > data.visible_requests && index == (int) data.visible_requests - 1) {
         window_advisors_show_advisor(ADVISOR_IMPERIAL);
         return;
     }
@@ -725,4 +795,9 @@ static void button_handle_request(int index, int param2)
                 break;
         }
     }
+}
+
+int sidebar_extra_is_information_displayed(sidebar_extra_display display)
+{
+    return (data.info_to_display & display) != 0;
 }

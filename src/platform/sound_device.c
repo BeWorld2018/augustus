@@ -1,8 +1,10 @@
+#include "sound/device.h"
+
+#include "campaign/campaign.h"
 #include "core/calc.h"
 #include "core/config.h"
 #include "core/file.h"
 #include "core/log.h"
-#include "sound/device.h"
 #include "game/settings.h"
 #include "platform/platform.h"
 #include "platform/vita/vita.h"
@@ -49,6 +51,7 @@ typedef struct {
 
 static struct {
     int initialized;
+    uint8_t *custom_music;
     Mix_Music *music;
     sound_channel channels[MAX_CHANNELS];
 } data;
@@ -86,7 +89,12 @@ void sound_device_open(void)
 #ifdef USE_SDL_AUDIOSTREAM
     custom_music.use_audiostream = HAS_AUDIOSTREAM();
 #endif
+    // Windows: use directsound by default, as wasapi has issues
+#ifdef __WINDOWS__
+    SDL_AudioInit("directsound");
+#endif
     if (0 == Mix_OpenAudio(AUDIO_RATE, AUDIO_FORMAT, AUDIO_CHANNELS, AUDIO_BUFFERS)) {
+        SDL_Log("Using default audio driver: %s", SDL_GetCurrentAudioDriver());
         init_channels();
         return;
     }
@@ -129,6 +137,12 @@ void sound_device_close(void)
 static Mix_Chunk *load_chunk(const char *filename)
 {
     if (filename[0]) {
+        size_t size;
+        uint8_t *audio_data = campaign_load_file(filename, &size);
+        if (audio_data) {
+            SDL_RWops *sdl_memory = SDL_RWFromMem(audio_data, (int) size);
+            return Mix_LoadWAV_RW(sdl_memory, SDL_TRUE);
+        }
 #if defined(__vita__) || defined(__ANDROID__)
         FILE *fp = file_open(filename, "rb");
         if (!fp) {
@@ -194,48 +208,62 @@ static void load_music_for_vita(const char *filename)
         free(vita_music_data.buffer);
         vita_music_data.buffer = 0;
     }
-    strncpy(vita_music_data.filename, filename, FILE_NAME_MAX - 1);
-    SceUID fd = sceIoOpen(vita_prepend_path(filename), SCE_O_RDONLY, 0777);
-    if (fd < 0) {
+    snprintf(vita_music_data.filename, FILE_NAME_MAX, "%s", filename);
+    FILE *fp = file_open(filename, "rb");
+    if (!fp) {
         return;
     }
-    vita_music_data.size = sceIoLseek(fd, 0, SCE_SEEK_END);
-    sceIoLseek(fd, 0, SCE_SEEK_SET);
+    fseek(fp, 0, SEEK_END);
+    vita_music_data.size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
     vita_music_data.buffer = malloc(sizeof(char) * vita_music_data.size);
-    sceIoRead(fd, vita_music_data.buffer, vita_music_data.size);
-    sceIoClose(fd);
+    if (!vita_music_data.buffer) {
+        file_close(fp);
+        return;
+    }
+    fread(vita_music_data.buffer, sizeof(char), (size_t) vita_music_data.size, fp);
+    file_close(fp);
 }
 #endif
 
-int sound_device_play_music(const char *filename, int volume_pct)
+int sound_device_play_music(const char *filename, int volume_pct, int loop)
 {
     if (data.initialized && config_get(CONFIG_GENERAL_ENABLE_AUDIO)) {
         sound_device_stop_music();
         if (!filename) {
             return 0;
         }
+        size_t size;
+        data.custom_music = campaign_load_file(filename, &size);
+        if (data.custom_music) {
+            SDL_RWops *sdl_music = SDL_RWFromMem(data.custom_music, (int) size);
+            data.music = Mix_LoadMUSType_RW(sdl_music,
+                file_has_extension(filename, "mp3") ? MUS_MP3 : MUS_WAV, SDL_TRUE);
+        } else {
 #ifdef __vita__
-        load_music_for_vita(filename);
-        if (!vita_music_data.buffer) {
-            return 0;
-        }
-        SDL_RWops *sdl_music = SDL_RWFromMem(vita_music_data.buffer, vita_music_data.size);
-        data.music = Mix_LoadMUSType_RW(sdl_music, file_has_extension(filename, "mp3") ? MUS_MP3 : MUS_WAV, SDL_TRUE);
+            load_music_for_vita(filename);
+            if (!vita_music_data.buffer) {
+                return 0;
+            }
+            SDL_RWops *sdl_music = SDL_RWFromMem(vita_music_data.buffer, vita_music_data.size);
+            data.music = Mix_LoadMUSType_RW(sdl_music,
+                file_has_extension(filename, "mp3") ? MUS_MP3 : MUS_WAV, SDL_TRUE);
 #elif defined(__ANDROID__)
-        FILE *fp = file_open(filename, "rb");
-        if (!fp) {
-            return 0;
-        }
-        SDL_RWops *sdl_fp = SDL_RWFromFP(fp, SDL_TRUE);
-        data.music = Mix_LoadMUSType_RW(sdl_fp, file_has_extension(filename, "mp3") ? MUS_MP3 : MUS_WAV, SDL_TRUE);
+            FILE *fp = file_open(filename, "rb");
+            if (!fp) {
+                return 0;
+            }
+            SDL_RWops *sdl_fp = SDL_RWFromFP(fp, SDL_TRUE);
+            data.music = Mix_LoadMUSType_RW(sdl_fp, file_has_extension(filename, "mp3") ? MUS_MP3 : MUS_WAV, SDL_TRUE);
 #else
-        data.music = Mix_LoadMUS(filename);
+            data.music = Mix_LoadMUS(filename);
 #endif
+        }
         if (!data.music) {
             SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                 "Error opening music file '%s'. Reason: %s", filename, Mix_GetError());
         } else {
-            if (Mix_PlayMusic(data.music, -1) == -1) {
+            if (Mix_PlayMusic(data.music, loop ? -1 : 0) == -1) {
                 data.music = 0;
                 SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
                     "Error playing music file '%s'. Reason: %s", filename, Mix_GetError());
@@ -248,16 +276,17 @@ int sound_device_play_music(const char *filename, int volume_pct)
     return 0;
 }
 
-void sound_device_play_file_on_channel(const char *filename, int channel, int volume_pct)
+int sound_device_play_file_on_channel(const char *filename, int channel, int volume_pct)
 {
     if (data.initialized && config_get(CONFIG_GENERAL_ENABLE_AUDIO)) {
         sound_device_stop_channel(channel);
         data.channels[channel].chunk = load_chunk(filename);
         if (data.channels[channel].chunk) {
             sound_device_set_channel_volume(channel, volume_pct);
-            Mix_PlayChannel(channel, data.channels[channel].chunk, 0);
+            return Mix_PlayChannel(channel, data.channels[channel].chunk, 0) != -1;
         }
     }
+    return 0;
 }
 
 void sound_device_play_channel(int channel, int volume_pct)
@@ -283,6 +312,16 @@ void sound_device_play_channel_panned(int channel, int volume_pct, int left_pct,
     }
 }
 
+void sound_device_on_audio_finished(void (*callback)(int))
+{
+    Mix_ChannelFinished(callback);
+}
+
+void sound_device_fadeout_music(int milisseconds)
+{
+    Mix_FadeOutMusic(milisseconds);
+}
+
 void sound_device_stop_music(void)
 {
     if (data.initialized) {
@@ -291,12 +330,15 @@ void sound_device_stop_music(void)
             Mix_FreeMusic(data.music);
             data.music = 0;
         }
+        free(data.custom_music);
+        data.custom_music = 0;
     }
 }
 
 void sound_device_stop_channel(int channel)
 {
     if (data.initialized) {
+        Mix_ChannelFinished(NULL);
         sound_channel *ch = &data.channels[channel];
         if (ch->chunk) {
             Mix_HaltChannel(channel);
@@ -370,7 +412,7 @@ static int custom_audio_stream_active(void)
     return custom_music.buffer != 0;
 }
 
-static int put_custom_audio_stream(const Uint8 *audio_data, int len)
+static int put_custom_audio_stream(const void *audio_data, int len)
 {
     if (!audio_data || len <= 0 || !custom_audio_stream_active()) {
         return 0;
@@ -434,6 +476,7 @@ static void custom_music_callback(void *dummy, Uint8 *dst, int len)
     if (custom_music.use_audiostream) {
         bytes_copied = SDL_AudioStreamGet(custom_music.stream, mix_buffer, len);
         if (bytes_copied <= 0) {
+            free(mix_buffer);
             return;
         }
     } else {
@@ -465,18 +508,15 @@ static void custom_music_callback(void *dummy, Uint8 *dst, int len)
     free(mix_buffer);
 }
 
-void sound_device_use_custom_music_player(int bitdepth, int num_channels, int rate,
-    const unsigned char *audio_data, int len)
+void sound_device_use_custom_music_player(int bitdepth, int num_channels, int rate, const void *audio_data, int len)
 {
     SDL_AudioFormat format;
     if (bitdepth == 8) {
         format = AUDIO_U8;
     } else if (bitdepth == 16) {
- #ifdef __MORPHOS__
- 		format = AUDIO_S16SYS;
- #else
-        format = AUDIO_S16;
- #endif
+        format = AUDIO_S16SYS;
+    } else if (bitdepth == 32) {
+        format = AUDIO_F32;
     } else {
         log_error("Custom music bitdepth not supported:", 0, bitdepth);
         return;
@@ -500,7 +540,7 @@ void sound_device_use_custom_music_player(int bitdepth, int num_channels, int ra
     Mix_HookMusic(custom_music_callback, 0);
 }
 
-void sound_device_write_custom_music_data(const unsigned char *audio_data, int len)
+void sound_device_write_custom_music_data(const void *audio_data, int len)
 {
     if (!audio_data || len <= 0 || !custom_audio_stream_active()) {
         return;

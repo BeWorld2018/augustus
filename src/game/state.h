@@ -34,7 +34,12 @@ enum {
     OVERLAY_SENTIMENT = 34,
     OVERLAY_MOTHBALL = 35,
     OVERLAY_ENEMY = 36,
-    OVERLAY_WAREHOUSE = 37,
+    OVERLAY_LOGISTICS = 37,
+    OVERLAY_SICKNESS = 38,
+    OVERLAY_EFFICIENCY = 39,
+    OVERLAY_STORAGES = 40,
+    OVERLAY_HEALTH = 41,
+    OVERLAY_EMPLOYMENT = 42,
 };
 
 void game_state_init(void);
@@ -42,6 +47,8 @@ void game_state_init(void);
 int game_state_is_paused(void);
 
 void game_state_toggle_paused(void);
+
+void game_state_pause(void);
 
 void game_state_unpause(void);
 

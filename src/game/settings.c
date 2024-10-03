@@ -3,7 +3,8 @@
 #include "city/constants.h"
 #include "core/buffer.h"
 #include "core/calc.h"
-#include "core/io.h"
+#include "core/dir.h"
+#include "core/file.h"
 #include "core/string.h"
 
 #define INF_SIZE 560
@@ -118,8 +119,23 @@ void settings_load(void)
 {
     load_default_settings();
 
-    int size = io_read_file_into_buffer("c3.inf", NOT_LOCALIZED, data.inf_file, INF_SIZE);
-    if (!size) {
+    const char *settings_file = dir_get_file_at_location("c3.inf", PATH_LOCATION_CONFIG);
+    if (!settings_file) {
+        return;
+    }
+    FILE *fp = file_open(settings_file, "rb");
+    if (!fp) {
+        return;
+    }
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    if (size > INF_SIZE) {
+        size = INF_SIZE;
+    }
+    fseek(fp, 0, SEEK_SET);
+    size_t bytes_read = fread(data.inf_file, 1, INF_SIZE, fp);
+    file_close(fp);
+    if (!bytes_read) {
         return;
     }
 
@@ -131,6 +147,9 @@ void settings_load(void)
         // most likely migration from Caesar 3
         data.window_width = 800;
         data.window_height = 600;
+    }
+    if (data.last_advisor <= ADVISOR_NONE || data.last_advisor > ADVISOR_CHIEF) {
+        data.last_advisor = ADVISOR_LABOR;
     }
 }
 
@@ -177,7 +196,14 @@ void settings_save(void)
     buffer_write_i32(buf, data.difficulty);
     buffer_write_i32(buf, data.gods_enabled);
 
-    io_write_buffer_to_file("c3.inf", data.inf_file, INF_SIZE);
+    // Find existing file to overwrite
+    const char *settings_file = dir_append_location("c3.inf", PATH_LOCATION_CONFIG);
+    FILE *fp = file_open(settings_file, "wb");
+    if (!fp) {
+        return;
+    }
+    fwrite(data.inf_file, 1, INF_SIZE, fp);
+    file_close(fp);
 }
 
 int setting_fullscreen(void)
@@ -263,6 +289,11 @@ void setting_decrease_game_speed(void)
     } else {
         data.game_speed = calc_bound(data.game_speed - 10, 10, 100);
     }
+}
+
+void setting_set_default_game_speed(void)
+{
+    data.game_speed = 70;
 }
 
 int setting_scroll_speed(void)

@@ -1,5 +1,6 @@
 #include "edit_price_change.h"
 
+#include "game/resource.h"
 #include "graphics/button.h"
 #include "graphics/generic_button.h"
 #include "graphics/graphics.h"
@@ -35,7 +36,8 @@ static generic_button buttons[] = {
 static struct {
     int id;
     editor_price_change price_change;
-    int focus_button_id;
+    unsigned int focus_button_id;
+    resource_type available_resources[RESOURCE_MAX];
 } data;
 
 static void init(int id)
@@ -61,7 +63,7 @@ static void draw_foreground(void)
     lang_text_draw_year(scenario_property_start_year() + data.price_change.year, 100, 158, FONT_NORMAL_BLACK);
 
     button_border_draw(240, 152, 120, 25, data.focus_button_id == 2);
-    lang_text_draw_centered(23, data.price_change.resource, 240, 158, 120, FONT_NORMAL_BLACK);
+    text_draw_centered(resource_get_data(data.price_change.resource)->text, 240, 158, 120, FONT_NORMAL_BLACK, COLOR_MASK_NONE);
 
     button_border_draw(100, 192, 200, 25, data.focus_button_id == 3);
     lang_text_draw_centered(44, data.price_change.is_rise ? 104 : 103, 100, 198, 200, FONT_NORMAL_BLACK);
@@ -100,12 +102,25 @@ static void button_year(int param1, int param2)
 
 static void set_resource(int value)
 {
-    data.price_change.resource = value;
+    data.price_change.resource = data.available_resources[value];
 }
 
 static void button_resource(int param1, int param2)
 {
-    window_select_list_show(screen_dialog_offset_x() + 25, screen_dialog_offset_y() + 40, 23, 16, set_resource);
+    static const uint8_t *resource_texts[RESOURCE_MAX];
+    static int total_resources = 0;
+    if (!total_resources) {
+        for (resource_type resource = RESOURCE_NONE; resource < RESOURCE_MAX; resource++) {
+            if (!resource_is_storable(resource)) {
+                continue;
+            }
+            resource_texts[total_resources] = resource_get_data(resource)->text;
+            data.available_resources[total_resources] = resource;
+            total_resources++;
+        }
+    }
+    window_select_list_show_text(screen_dialog_offset_x() + 25, screen_dialog_offset_y() + 40,
+        resource_texts, total_resources, set_resource);
 }
 
 static void button_toggle_rise(int param1, int param2)

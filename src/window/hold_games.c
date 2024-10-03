@@ -48,9 +48,9 @@ static generic_button buttons_games_size[] = {
 };
 
 static struct {
-    int focus_button_id;
-    int focus_image_button_id;
-    int focus_game_button_id;
+    unsigned int focus_button_id;
+    unsigned int focus_image_button_id;
+    unsigned int focus_game_button_id;
     int return_to_city;
     int game_possible;
 } data;
@@ -69,17 +69,24 @@ static void draw_background(void)
 
     outer_panel_draw(48, 48, 34, 22);
     text_draw_centered(translation_for(game->header_key), 48, 60, 544, FONT_LARGE_BLACK, 0);
+    int border_image_id = assets_get_image_id("UI", "Image Border Small");
+    int highlight_image_id = assets_get_image_id("UI", "Highlight");
+    int base_image_id = assets_get_image_id("UI", "Naumachia Icon");
     for (int i = 0; i < MAX_GAMES; i++) {
+        color_t border_color, highlight_color;
         if (i == game->id - 1) {
-            button_border_draw(100 * i + 165, 92, 90, 100, 1);
-            image_draw(assets_get_image_id("UI_Elements", "Naum Ico S") +
-                (2 * i), 100 * i + 170, 96);
+            border_color = COLOR_BORDER_GREEN;
+            highlight_color = COLOR_MASK_NONE;
+            button_border_draw(100 * i + 166, 92, 90, 100, 1);
         } else {
-            image_draw(assets_get_image_id("UI_Elements", "Naum Ico DS") +
-                (2 * i), 100 * i + 170, 96);
+            border_color = COLOR_BORDER_RED;
+            highlight_color = COLOR_BLACK;
         }
+        image_draw_border(border_image_id, 100 * i + 170, 96, border_color);
+        image_draw(base_image_id + i, 100 * i + 175, 101, COLOR_MASK_NONE, SCALE_NONE);
+        image_draw_border(highlight_image_id, 100 * i + 175, 101, highlight_color);
     }
-    text_draw_multiline(translation_for(game->description_key), 70, 222, 500, FONT_NORMAL_BLACK, 0);
+    text_draw_multiline(translation_for(game->description_key), 70, 222, 500, 0, FONT_NORMAL_BLACK, 0);
 
     int width = text_draw(translation_for(TR_WINDOW_GAMES_COST), 120, 300, FONT_NORMAL_BLACK, 0);
     width += text_draw_money(city_games_money_cost(selected_game_id), 120 + width, 300, FONT_NORMAL_BLACK);
@@ -95,7 +102,7 @@ static void draw_background(void)
             if (city_resource_get_amount_including_granaries(resource, resource_cost, 0) < resource_cost) {
                 has_resources = 0;
             }
-            image_draw(image_group(GROUP_RESOURCE_ICONS) + resource, 120 + width, 316);
+            image_draw(resource_get_data(resource)->image.icon, 120 + width, 316, COLOR_MASK_NONE, SCALE_NONE);
             width += 32;
         }
     }
@@ -128,7 +135,7 @@ static void draw_foreground(void)
     graphics_reset_dialog();
 }
 
-static void close_window()
+static void close_window(void)
 {
     if (data.return_to_city) {
         window_city_show();

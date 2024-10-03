@@ -32,11 +32,12 @@ int building_dock_accepts_ship(int ship_id, int dock_id);
 
 int building_dock_reposition_anchored_ship(int ship_id, map_point *tile);
 
-int building_dock_can_import_from_ship(building *dock, int ship_id);
+int building_dock_can_import_from_ship(const building *dock, int ship_id);
 
-int building_dock_can_export_to_ship(building *dock, int ship_id);
+int building_dock_can_export_to_ship(const building *dock, int ship_id);
 
 int building_dock_can_trade_with_route(int route_id, int dock_id);
 
 void building_dock_set_can_trade_with_route(int route_id, int dock_id, int can_trade);
+
 #endif // BUILDING_DOCK_H

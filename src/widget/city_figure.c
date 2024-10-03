@@ -7,18 +7,18 @@
 #include "graphics/image.h"
 #include "graphics/text.h"
 
-static void draw_figure_with_cart(const figure *f, int x, int y)
+static void draw_figure_with_cart(const figure *f, int x, int y, float scale)
 {
     if (f->y_offset_cart >= 0) {
-        image_draw(f->image_id, x, y);
-        image_draw(f->cart_image_id, x + f->x_offset_cart, y + f->y_offset_cart);
+        image_draw(f->image_id, x, y, COLOR_MASK_NONE, scale);
+        image_draw(f->cart_image_id, x + f->x_offset_cart, y + f->y_offset_cart, COLOR_MASK_NONE, scale);
     } else {
-        image_draw(f->cart_image_id, x + f->x_offset_cart, y + f->y_offset_cart);
-        image_draw(f->image_id, x, y);
+        image_draw(f->cart_image_id, x + f->x_offset_cart, y + f->y_offset_cart, COLOR_MASK_NONE, scale);
+        image_draw(f->image_id, x, y, COLOR_MASK_NONE, scale);
     }
 }
 
-static void draw_hippodrome_horse(const figure *f, int x, int y)
+static void draw_hippodrome_horse(const figure *f, int x, int y, float scale)
 {
     int val = f->wait_ticks_missile;
     switch (city_view_orientation()) {
@@ -58,7 +58,7 @@ static void draw_hippodrome_horse(const figure *f, int x, int y)
             } else {
                 y -= 12;
             }
-            // fall through
+            break;
         case DIR_4_BOTTOM:
             x += 20;
             if (val <= 9) {
@@ -98,29 +98,29 @@ static void draw_hippodrome_horse(const figure *f, int x, int y)
             }
             break;
     }
-    draw_figure_with_cart(f, x, y);
+    draw_figure_with_cart(f, x, y, scale);
 }
 
-static void draw_fort_standard(const figure *f, int x, int y)
+static void draw_fort_standard(const figure *f, int x, int y, float scale)
 {
     if (!formation_get(f->formation_id)->in_distant_battle) {
         // base
-        image_draw(f->image_id, x, y);
+        image_draw(f->image_id, x, y, COLOR_MASK_NONE, scale);
         // flag
         int flag_height = image_get(f->cart_image_id)->height;
-        image_draw(f->cart_image_id, x, y - flag_height);
+        image_draw(f->cart_image_id, x, y - flag_height, COLOR_MASK_NONE, scale);
         // top icon
         int icon_image_id = image_group(GROUP_FIGURE_FORT_STANDARD_ICONS) + formation_get(f->formation_id)->legion_id;
-        image_draw(icon_image_id, x, y - image_get(icon_image_id)->height - flag_height);
+        image_draw(icon_image_id, x, y - image_get(icon_image_id)->height - flag_height, COLOR_MASK_NONE, scale);
     }
 }
 
-static void draw_map_flag(const figure *f, int x, int y)
+static void draw_map_flag(const figure *f, int x, int y, float scale)
 {
     // base
-    image_draw(f->image_id, x, y);
+    image_draw(f->image_id, x, y, COLOR_MASK_NONE, scale);
     // flag
-    image_draw(f->cart_image_id, x, y - image_get(f->cart_image_id)->height);
+    image_draw(f->cart_image_id, x, y - image_get(f->cart_image_id)->height, COLOR_MASK_NONE, scale);
     // flag number
     int number = 0;
     int id = f->resource_id;
@@ -132,7 +132,7 @@ static void draw_map_flag(const figure *f, int x, int y)
         number = id - MAP_FLAG_HERD_MIN + 1;
     }
     if (number > 0) {
-        text_draw_number(number, '@', " ", x + 6, y + 7, FONT_NORMAL_PLAIN, COLOR_WHITE);
+        text_draw_number_scaled(number, '@', 0, x + 6, y + 7, FONT_NORMAL_PLAIN, COLOR_WHITE, scale);
     }
 }
 
@@ -209,7 +209,7 @@ static void adjust_pixel_offset(const figure *f, int *pixel_x, int *pixel_y)
     if (f->use_cross_country) {
         tile_cross_country_offset_to_pixel_offset(
             f->cross_country_x % 15, f->cross_country_y % 15, &x_offset, &y_offset);
-        y_offset -= f->missile_damage;
+        y_offset -= f->missile_height;
     } else {
         int direction = figure_image_normalize_direction(f->direction);
         tile_progress_to_pixel_offset(direction, f->progress_on_tile, &x_offset, &y_offset);
@@ -217,13 +217,14 @@ static void adjust_pixel_offset(const figure *f, int *pixel_x, int *pixel_y)
         if (f->figures_on_same_tile_index && f->type != FIGURE_BALLISTA) {
             // an attempt to not let people walk through each other
             static const int BUSY_ROAD_X_OFFSETS[] = {
-                0, 8, 8, -8, -8, 0, 16, 0, -16, 8, -8, 16, -16, 16, -16, 8, -8, 0, 24, 0, -24, 0, 0, 0
+                0, 8, 8, -8, -8, 0, 16, 0, -16, 8, -8, 16, -16, 16, -16, 8, -8, 0, 24, 0, -24
             };
             static const int BUSY_ROAD_Y_OFFSETS[] = {
-                0, 0, 8, 8, -8, -16, 0, 16, 0, -16, 16, 8, -8, -8, 8, 16, -16, -24, 0, 24, 0, 0, 0, 0
+                0, 0, 8, 8, -8, -16, 0, 16, 0, -16, 16, 8, -8, -8, 8, 16, -16, -24, 0, 24, 0
             };
-            x_offset += BUSY_ROAD_X_OFFSETS[f->figures_on_same_tile_index];
-            y_offset += BUSY_ROAD_Y_OFFSETS[f->figures_on_same_tile_index];
+            static const int BUSY_ROAD_OFFSET_LEN = 21;
+            x_offset += BUSY_ROAD_X_OFFSETS[f->figures_on_same_tile_index % BUSY_ROAD_OFFSET_LEN];
+            y_offset += BUSY_ROAD_Y_OFFSETS[f->figures_on_same_tile_index % BUSY_ROAD_OFFSET_LEN];
         }
     }
 
@@ -240,59 +241,57 @@ static void adjust_pixel_offset(const figure *f, int *pixel_x, int *pixel_y)
 
 
     const image *img = f->is_enemy_image ? image_get_enemy(f->image_id) : image_get(f->image_id);
-    *pixel_x += x_offset - img->sprite_offset_x;
-    *pixel_y += y_offset - img->sprite_offset_y;
-
+    *pixel_x += x_offset - (img->animation ? img->animation->sprite_offset_x : 0);
+    *pixel_y += y_offset - (img->animation ? img->animation->sprite_offset_y : 0);
 }
 
-static void draw_figure(const figure *f, int x, int y, int highlight)
+static void draw_figure(const figure *f, int x, int y, float scale, int highlight)
 {
     if (f->cart_image_id) {
         switch (f->type) {
             case FIGURE_CART_PUSHER:
+            case FIGURE_DEPOT_CART_PUSHER:
             case FIGURE_WAREHOUSEMAN:
             case FIGURE_LION_TAMER:
             case FIGURE_DOCKER:
             case FIGURE_NATIVE_TRADER:
             case FIGURE_IMMIGRANT:
             case FIGURE_EMIGRANT:
-                draw_figure_with_cart(f, x, y);
+            case FIGURE_LIGHTHOUSE_SUPPLIER:
+                draw_figure_with_cart(f, x, y, scale);
                 break;
             case FIGURE_HIPPODROME_HORSES:
-                draw_hippodrome_horse(f, x, y);
+                draw_hippodrome_horse(f, x, y, scale);
                 break;
             case FIGURE_FORT_STANDARD:
-                draw_fort_standard(f, x, y);
+                draw_fort_standard(f, x, y, scale);
                 break;
             case FIGURE_MAP_FLAG:
-                draw_map_flag(f, x, y);
+                draw_map_flag(f, x, y, scale);
                 break;
             default:
-                image_draw(f->image_id, x, y);
+                image_draw(f->image_id, x, y, 0, scale);
                 break;
         }
     } else {
         if (f->is_enemy_image) {
-            image_draw_enemy(f->image_id, x, y);
+            image_draw_enemy(f->image_id, x, y, scale);
         } else {
-            image_draw(f->image_id, x, y);
-            if (highlight) {
-                image_draw_blend_alpha(f->image_id, x, y, COLOR_MASK_LEGION_HIGHLIGHT);
-            }
+            image_draw(f->image_id, x, y, highlight ? COLOR_MASK_LEGION_HIGHLIGHT : COLOR_MASK_NONE, scale);
         }
     }
 }
 
-void city_draw_figure(const figure *f, int x, int y, int highlight)
+void city_draw_figure(const figure *f, int x, int y, float scale, int highlight)
 {
     adjust_pixel_offset(f, &x, &y);
-    draw_figure(f, x, y, highlight);
+    draw_figure(f, x, y, scale, highlight);
 }
 
-void city_draw_selected_figure(const figure *f, int x, int y, pixel_coordinate *coord)
+void city_draw_selected_figure(const figure *f, int x, int y, float scale, pixel_coordinate *coord)
 {
     adjust_pixel_offset(f, &x, &y);
-    draw_figure(f, x, y, 0);
+    draw_figure(f, x, y, scale, 0);
     coord->x = x;
     coord->y = y;
 }

@@ -3,6 +3,8 @@
 
 #include "core/buffer.h"
 
+#define MAX_ENEMY_ARMIES 125
+
 typedef struct {
     int formation_id;
     int layout;
@@ -13,9 +15,12 @@ typedef struct {
     int destination_building_id;
     int num_legions;
     int ignore_roman_soldiers;
+    int started_retreating;
 } enemy_army;
 
 void enemy_armies_clear(void);
+
+void enemy_army_clear(int invasion_id);
 
 const enemy_army *enemy_army_get(int invasion_id);
 

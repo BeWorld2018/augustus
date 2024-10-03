@@ -18,42 +18,74 @@ if ("$env:GITHUB_REF" -match "^refs/tags/v") {
     $pr_id = $matches[1];
     $version = "pr-$pr_id-$version"
 } else {
-    echo "Unknown branch type: ${env:GITHUB_REF} - skipping upload"
-    exit
+    echo "Unknown branch type: ${env:GITHUB_REF}"
 }
 
 # Create deploy file
 mkdir deploy
 if ("${env:COMPILER}" -eq "msvc") {
-    $suffix = "windows-msvc"
-    CopyFile build/Release/augustus.exe .
+    $suffix = "windows-msvc-x64"
+    CopyFile build/RelWithDebInfo/augustus.exe .
+    CopyFile build/RelWithDebInfo/augustus.pdb .
     CopyFile ext\SDL2\SDL2-${env:SDL_VERSION}\lib\x64\SDL2.dll .
     CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\lib\x64\SDL2_mixer.dll .
-    CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\lib\x64\libmpg123-0.dll .
+} elseif ("${env:COMPILER}" -eq "msvc-arm64") {
+    $suffix = "windows-arm64"
+    CopyFile build/RelWithDebInfo/augustus.exe .
+    CopyFile build/RelWithDebInfo/augustus.pdb .
+    CopyFile ext\SDL2\SDL2\SDL2.dll .
+    CopyFile ext\SDL2\SDL2_mixer\SDL2_mixer.dll .
 } elseif ("${env:COMPILER}" -eq "mingw-32") {
     $suffix = "windows"
+    build/cv2pdb.exe build/augustus.exe
     CopyFile build/augustus.exe .
+    CopyFile build/augustus.pdb .
     CopyFile ext\SDL2\SDL2-${env:SDL_VERSION}\i686-w64-mingw32\bin\SDL2.dll .
     CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\i686-w64-mingw32\bin\SDL2_mixer.dll .
-    CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\i686-w64-mingw32\bin\libmpg123-0.dll .
 } elseif ("${env:COMPILER}" -eq "mingw-64") {
     $suffix = "windows-64bit"
+    build/cv2pdb.exe build/augustus.exe
     CopyFile build/augustus.exe .
+    CopyFile build/augustus.pdb .
     CopyFile ext\SDL2\SDL2-${env:SDL_VERSION}\x86_64-w64-mingw32\bin\SDL2.dll .
     CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\x86_64-w64-mingw32\bin\SDL2_mixer.dll .
-    CopyFile ext\SDL2\SDL2_mixer-${env:SDL_MIXER_VERSION}\x86_64-w64-mingw32\bin\libmpg123-0.dll .
 } else {
     throw "Unknown compiler: ${env:COMPILER}"
 }
 
 $deploy_file = "augustus-$version-$suffix.zip"
 
+$packed_assets = $false
+
 if ($repo -eq "release") {
+    echo "Packing the assets"
+
+    cd .\res\asset_packer
+    mkdir build
+    cd build
+
+    cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=x86_64-w64-mingw32-gcc.exe -D CMAKE_MAKE_PROGRAM=mingw32-make.exe ..
+    cmake --build . -j 4 --config Release
+    if ($?) {
+        .\asset_packer.exe ..\..\
+        if ($?) {
+            Move-Item -Path ..\..\packed_assets -Destination ..\..\..\assets
+            $packed_assets = $true
+        }
+    }
+    if (!$packed_assets) {
+        echo "Unable to pack the assets. Using the original folder"
+        Move-Item -Path ..\..\assets -Destination ..\..\..\
+        $packed_assets = $true
+    }
+
+    cd ..\..\..
+
     xcopy /ei res\maps .\maps
     xcopy /ei res\manual .\manual
-    7z a "deploy\$deploy_file" augustus.exe SDL2.dll SDL2_mixer.dll libmpg123-0.dll assets maps manual
+    7z a "deploy\$deploy_file" augustus.exe augustus.pdb SDL2.dll SDL2_mixer.dll assets maps manual
 } else {
-    7z a "deploy\$deploy_file" augustus.exe SDL2.dll SDL2_mixer.dll libmpg123-0.dll
+    7z a "deploy\$deploy_file" augustus.exe augustus.pdb SDL2.dll SDL2_mixer.dll
 }
 
 if (!$?) {
@@ -75,12 +107,40 @@ if (!$env:UPLOAD_TOKEN) {
     exit
 }
 
-echo "Uploading $deploy_file to $repo/windows/$version"
-curl -u "$env:UPLOAD_TOKEN" -T "deploy/$deploy_file" "https://augustus.josecadete.net/upload/$repo/windows/$version/${deploy_file}"
+echo "Uploading $deploy_file to $repo/$suffix/$version"
+curl -u "$env:UPLOAD_TOKEN" -T "deploy/$deploy_file" "https://augustus.josecadete.net/upload/$repo/$suffix/$version/${deploy_file}"
 if (!$?) {
     throw "Unable to upload"
 }
 echo "Uploaded. URL: https://augustus.josecadete.net/$repo.html"
+
+if ($suffix -ne "windows") {
+    exit
+}
+
+if (!$packed_assets) {
+    echo "Packing the assets"
+
+    cd .\res\asset_packer
+    mkdir build
+    cd build
+
+    cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -D CMAKE_C_COMPILER=x86_64-w64-mingw32-gcc.exe -D CMAKE_MAKE_PROGRAM=mingw32-make.exe ..
+    cmake --build . -j 4 --config Release
+    if ($?) {
+        .\asset_packer.exe ..\..\
+        if ($?) {
+            Move-Item -Path ..\..\packed_assets -Destination ..\..\..\assets
+            $packed_assets = $true
+        }
+    }
+    if (!$packed_assets) {
+        echo "Unable to pack the assets. Using the original folder"
+        Move-Item -Path ..\..\assets -Destination ..\..\..\
+    }
+
+    cd ..\..\..
+}
 
 $assets_file = "assets-$version-$repo.zip"
 7z a "$assets_file" assets

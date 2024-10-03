@@ -4,12 +4,13 @@
 #include "city/health.h"
 #include "city/houses.h"
 #include "city/population.h"
+#include "core/calc.h"
 #include "graphics/image.h"
 #include "graphics/lang_text.h"
 #include "graphics/panel.h"
 #include "graphics/text.h"
 
-#define ADVISOR_HEIGHT 18
+#define ADVISOR_HEIGHT 26
 
 static int get_health_advice(void)
 {
@@ -28,59 +29,74 @@ static int get_health_advice(void)
     }
 }
 
+static void print_health_building_info(int y_offset, building_type type, int population_served, int coverage)
+{
+    static const int BUILDING_ID_TO_STRING_ID[] = { 28, 30, 24, 26 };
+
+    lang_text_draw_amount(8, BUILDING_ID_TO_STRING_ID[type - BUILDING_DOCTOR],
+        building_count_total(type), 40, y_offset, FONT_NORMAL_WHITE);
+    text_draw_number_centered(building_count_total(type), 150, y_offset, 100, FONT_NORMAL_WHITE);
+
+    int width = text_draw_number(population_served, '@', " ", 280, y_offset, FONT_NORMAL_WHITE, 0);
+
+    if (type == BUILDING_DOCTOR || type == BUILDING_HOSPITAL) {
+        lang_text_draw(56, 6, 280 + width, y_offset, FONT_NORMAL_WHITE);
+    } else {
+        lang_text_draw(58, 5, 280 + width, y_offset, FONT_NORMAL_WHITE);
+    }
+    
+    if (coverage == 0) {
+        lang_text_draw_centered(57, 10, 440, y_offset, 160, FONT_NORMAL_WHITE);
+    } else if (coverage < 100) {
+        lang_text_draw_centered(57, coverage / 10 + 11, 440, y_offset, 160, FONT_NORMAL_WHITE);
+    } else {
+        lang_text_draw_centered(57, 21, 440, y_offset, 160, FONT_NORMAL_WHITE);
+    }
+}
+
 static int draw_background(void)
 {
     outer_panel_draw(0, 0, 40, ADVISOR_HEIGHT);
-    image_draw(image_group(GROUP_ADVISOR_ICONS) + 6, 10, 10);
+    image_draw(image_group(GROUP_ADVISOR_ICONS) + 6, 10, 10, COLOR_MASK_NONE, SCALE_NONE);
+
+    int sickness_level = city_health_get_global_sickness_level();
 
     lang_text_draw(56, 0, 60, 12, FONT_LARGE_BLACK);
+
+    int x_offset = lang_text_draw(CUSTOM_TRANSLATION, TR_ADVISOR_HEALTH_RATING, 60, 44, FONT_NORMAL_BLACK);
+    text_draw_number(city_health(), 0, "", 60 + x_offset, 44, FONT_NORMAL_BLACK, 0);
+
     if (city_population() >= 200) {
-        lang_text_draw_multiline(56, city_health() / 10 + 16, 60, 46, 512, FONT_NORMAL_BLACK);
+        lang_text_draw_multiline(56, city_health() / 10 + 16, 60, 62, 512, FONT_NORMAL_BLACK);
     } else {
-        lang_text_draw_multiline(56, 15, 60, 46, 512, FONT_NORMAL_BLACK);
+        lang_text_draw_multiline(56, 15, 60, 62, 512, FONT_NORMAL_BLACK);
     }
-    lang_text_draw(56, 3, 180, 94, FONT_SMALL_PLAIN);
-    lang_text_draw(56, 4, 290, 94, FONT_SMALL_PLAIN);
-    lang_text_draw_centered(56, 5, 440, 94, 160, FONT_SMALL_PLAIN);
+    lang_text_draw(56, 3, 180, 110, FONT_SMALL_PLAIN);
+    lang_text_draw(56, 4, 290, 110, FONT_SMALL_PLAIN);
+    lang_text_draw_centered(56, 5, 440, 110, 160, FONT_SMALL_PLAIN);
 
-    inner_panel_draw(32, 108, 36, 5);
+    inner_panel_draw(32, 124, 36, 5);
 
-    // bathhouses
-    lang_text_draw_amount(8, 24, building_count_total(BUILDING_BATHHOUSE), 40, 112, FONT_NORMAL_WHITE);
-    text_draw_number_centered(building_count_active(BUILDING_BATHHOUSE), 150, 112, 100, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 290, 112, 120, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 440, 112, 160, FONT_NORMAL_WHITE);
+    int population = city_population();
 
-    // barbers
-    lang_text_draw_amount(8, 26, building_count_total(BUILDING_BARBER), 40, 132, FONT_NORMAL_WHITE);
-    text_draw_number_centered(building_count_active(BUILDING_BARBER), 150, 132, 100, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 290, 132, 120, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 440, 132, 160, FONT_NORMAL_WHITE);
+    int people_covered = city_health_get_population_with_baths_access();
+    print_health_building_info(128, BUILDING_BATHHOUSE, people_covered, calc_percentage(people_covered, population));
 
-    // clinics
-    lang_text_draw_amount(8, 28, building_count_total(BUILDING_DOCTOR), 40, 152, FONT_NORMAL_WHITE);
-    text_draw_number_centered(building_count_active(BUILDING_DOCTOR), 150, 152, 100, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 290, 152, 120, FONT_NORMAL_WHITE);
-    lang_text_draw_centered(56, 2, 440, 152, 160, FONT_NORMAL_WHITE);
+    people_covered = city_health_get_population_with_barber_access();
+    print_health_building_info(148, BUILDING_BARBER, people_covered, calc_percentage(people_covered, population));
 
-    // hospitals
-    lang_text_draw_amount(8, 30, building_count_total(BUILDING_HOSPITAL), 40, 172, FONT_NORMAL_WHITE);
-    text_draw_number_centered(building_count_active(BUILDING_HOSPITAL), 150, 172, 100, FONT_NORMAL_WHITE);
+    people_covered = city_health_get_population_with_clinic_access();
+    print_health_building_info(168, BUILDING_DOCTOR, people_covered, calc_percentage(people_covered, population));
 
-    int width = text_draw_number(1000 * building_count_active(BUILDING_HOSPITAL), '@', " ",
-        280, 172, FONT_NORMAL_WHITE, 0);
-    lang_text_draw(56, 6, 280 + width, 172, FONT_NORMAL_WHITE);
+    people_covered = 1000 * building_count_active(BUILDING_HOSPITAL);
+    print_health_building_info(188, BUILDING_HOSPITAL, people_covered, city_culture_coverage_hospital());
 
-    int pct_hospital = city_culture_coverage_hospital();
-    if (pct_hospital == 0) {
-        lang_text_draw_centered(57, 10, 440, 172, 160, FONT_NORMAL_WHITE);
-    } else if (pct_hospital < 100) {
-        lang_text_draw_centered(57, pct_hospital / 10 + 11, 440, 172, 160, FONT_NORMAL_WHITE);
-    } else {
-        lang_text_draw_centered(57, 21, 440, 172, 160, FONT_NORMAL_WHITE);
-    }
+    int text_height = lang_text_draw_multiline(56, 7 + get_health_advice(), 60, 226, 512, FONT_NORMAL_BLACK);
 
-    lang_text_draw_multiline(56, 7 + get_health_advice(), 60, 194, 512, FONT_NORMAL_BLACK);
+    lang_text_draw(CUSTOM_TRANSLATION, TR_ADVISOR_HEALTH_SURVEILLANCE, 60, 246 + text_height, FONT_NORMAL_BLACK);
+    text_height += 16;
+    text_draw_multiline(translation_for(TR_ADVISOR_SICKNESS_LEVEL_LOW + sickness_level),
+        60, 246 + text_height, 512, 0, FONT_NORMAL_BLACK, 0);
 
     return ADVISOR_HEIGHT;
 }

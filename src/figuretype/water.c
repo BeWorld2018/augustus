@@ -165,7 +165,8 @@ void figure_shipwreck_action(figure *f)
     f->image_id = image_group(GROUP_FIGURE_SHIPWRECK) + f->image_offset / 16;
 }
 
-static int fishing_boat_percentage_speed() {
+static int fishing_boat_percentage_speed(void)
+{
     if (building_monument_working(BUILDING_LIGHTHOUSE)) {
         return 10;
     }
@@ -294,6 +295,7 @@ void figure_fishing_boat_action(figure *f)
                 f->wait_ticks = 0;
                 b->figure_spawn_delay = 1;
                 b->data.industry.has_fish++;
+                b->data.industry.production_current_month += 100;
             } else if (f->direction == DIR_FIGURE_REROUTE) {
                 figure_route_remove(f);
             } else if (f->direction == DIR_FIGURE_LOST) {

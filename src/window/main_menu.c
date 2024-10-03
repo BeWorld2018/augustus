@@ -1,6 +1,7 @@
 #include "main_menu.h"
 
 #include "assets/assets.h"
+#include "campaign/campaign.h"
 #include "core/calc.h"
 #include "core/string.h"
 #include "editor/editor.h"
@@ -19,7 +20,7 @@
 #include "window/cck_selection.h"
 #include "window/config.h"
 #include "window/file_dialog.h"
-#include "window/new_career.h"
+#include "window/new_campaign.h"
 #include "window/plain_message_dialog.h"
 #include "window/popup_dialog.h"
 
@@ -28,7 +29,7 @@
 static void button_click(int type, int param2);
 
 static struct {
-    int focus_button_id;
+    unsigned int focus_button_id;
     int logo_image_id;
 } data;
 
@@ -58,15 +59,18 @@ static void draw_version_string(void)
 
 static void draw_background(void)
 {
+    graphics_reset_dialog();
+    graphics_reset_clip_rectangle();
     image_draw_fullscreen_background(image_group(GROUP_INTERMEZZO_BACKGROUND));
 
-    graphics_in_dialog();
-    if (!data.logo_image_id) {
-        data.logo_image_id = assets_get_image_id("UI_Elements", "Main Menu Banner");
-    }
-    image_draw(data.logo_image_id, 110, -50);
-    graphics_reset_dialog();
-    if (window_is(WINDOW_MAIN_MENU)) {
+    if (!window_is(WINDOW_FILE_DIALOG)) {
+        graphics_in_dialog();
+        outer_panel_draw(162, 32, 20, 22);
+        if (!data.logo_image_id) {
+            data.logo_image_id = assets_get_image_id("UI", "Main Menu Banner");
+        }
+        image_draw(data.logo_image_id, 176, 50, COLOR_MASK_NONE, SCALE_NONE);
+        graphics_reset_dialog();
         draw_version_string();
     }
 }
@@ -75,16 +79,17 @@ static void draw_foreground(void)
 {
     graphics_in_dialog();
 
-    for (int i = 0; i < MAX_BUTTONS; i++) {
-        large_label_draw(buttons[i].x, buttons[i].y, buttons[i].width / BLOCK_SIZE, data.focus_button_id == i + 1 ? 1 : 0);
+    for (unsigned int i = 0; i < MAX_BUTTONS; i++) {
+        large_label_draw(buttons[i].x, buttons[i].y, buttons[i].width / BLOCK_SIZE,
+            data.focus_button_id == i + 1 ? 1 : 0);
     }
 
-    lang_text_draw_centered(30, 1, 192, 136, 256, FONT_NORMAL_GREEN);
-    lang_text_draw_centered(30, 2, 192, 176, 256, FONT_NORMAL_GREEN);
-    lang_text_draw_centered(30, 3, 192, 216, 256, FONT_NORMAL_GREEN);
-    lang_text_draw_centered(9, 8, 192, 256, 256, FONT_NORMAL_GREEN);
-    lang_text_draw_centered(2, 0, 192, 296, 256, FONT_NORMAL_GREEN);
-    lang_text_draw_centered(30, 5, 192, 336, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(CUSTOM_TRANSLATION, TR_MAIN_MENU_NEW_CAMPAIGN, 192, 137, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(30, 2, 192, 177, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(30, 3, 192, 217, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(9, 8, 192, 257, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(2, 0, 192, 297, 256, FONT_NORMAL_GREEN);
+    lang_text_draw_centered(30, 5, 192, 337, 256, FONT_NORMAL_GREEN);
 
     graphics_reset_dialog();
 }
@@ -113,7 +118,7 @@ static void confirm_exit(int accepted, int checked)
 static void button_click(int type, int param2)
 {
     if (type == 1) {
-        window_new_career_show();
+        window_new_campaign_show();
     } else if (type == 2) {
         window_file_dialog_show(FILE_TYPE_SAVED_GAME, FILE_DIALOG_LOAD);
     } else if (type == 3) {
@@ -137,6 +142,7 @@ void window_main_menu_show(int restart_music)
     if (restart_music) {
         sound_music_play_intro();
     }
+    campaign_clear();
     window_type window = {
         WINDOW_MAIN_MENU,
         draw_background,

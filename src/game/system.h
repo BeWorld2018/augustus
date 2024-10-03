@@ -16,6 +16,24 @@
 const char *system_version(void);
 
 /**
+ * Gets the current processor architecture
+ * @return Processor architecture
+ */
+const char *system_architecture(void);
+
+/**
+ * Gets the current operating system
+ * @return Operating system
+ */
+const char *system_OS(void);
+
+/**
+ * Gets the current number of ticks in milisseconds since the game started
+ * @return Number of ticks
+ */
+uint64_t system_get_ticks(void);
+
+/**
  * Resize window
  * @param width New width
  * @param height New height
@@ -28,27 +46,6 @@ void system_resize(int width, int height);
  * @param height Pointer to variable to store the max height
  */
 void system_get_max_resolution(int *width, int *height);
-
-/**
- * Reload game textures
- * @return 0 if there was a problem reloading the textures, 1 otherwise
- */
-int system_reload_textures(void);
-
-/**
- * Get the maximum allowed zoom
- * @param width The width to check the zoom
- * @param height The height to check the zoom
- * @return The maximum allowed zoom, truncated between 100 and 200
- */
-int system_get_max_zoom(int width, int height);
-
-/**
- * Saves the screen buffer to memory
- * Even though it is set to "void", uses "color_t" format
- * @return true if saving was successful, false otherwise
- */
-int system_save_screen_buffer(void *pixels);
 
 /**
  * Center window
@@ -67,6 +64,12 @@ int system_is_fullscreen_only(void);
 void system_set_fullscreen(int fullscreen);
 
 /**
+ * Changes the window title
+ * @param title The new window title
+ */
+void system_change_window_title(const char *title);
+
+/**
  * Set display scale to the given percentage
  * @param scale_percentage Scale percentage to set, 100% is normal
  * @return The actual scale percentage that was set, which may be different to respect minimum resolution
@@ -74,10 +77,12 @@ void system_set_fullscreen(int fullscreen);
 int system_scale_display(int scale_percentage);
 
 /**
- * Gets maximum display scale for the current display
- * @return Maximum scale percentage
+ * Checks whether the display can be scaled. If true, min_scale and max_scale indicate by how much.
+ * @param min_scale Minimum scale that can be applied
+ * @param max_scale Maximum scale that can be applied
+ * @return True if the display can be scaled
  */
-int system_get_max_display_scale(void);
+int system_can_scale_display(int *min_scale, int *max_scale);
 
 /**
  * (Re-)Initialize cursors with the specified scale percentage
@@ -90,6 +95,16 @@ void system_init_cursors(int scale_percentage);
  * @param cursor_id Cursor to set
  */
 void system_set_cursor(int cursor_id);
+
+/**
+ * Show the mouse cursor
+ */
+void system_show_cursor(void);
+
+/**
+ * Hide the mouse cursor
+ */
+void system_hide_cursor(void);
 
 /**
  * Get the key corresponding to the symbol in the current layout
@@ -173,26 +188,23 @@ void system_move_mouse_cursor(int delta_x, int delta_y);
 void system_set_mouse_position(int *x, int *y);
 
 /**
- * Creates a ui framebuffer
- * @return The ui framebuffer
- */
-color_t *system_create_ui_framebuffer(int width, int height);
-
-/**
- * Creates a city framebuffer
- * @return The city framebuffer
- */
-color_t *system_create_city_framebuffer(int width, int height);
-
-/**
- * Releases the city framebuffer
- */
-void system_release_city_framebuffer(void);
-
-/**
  * Sets up the crash handler
  */
 void system_setup_crash_handler(void);
+
+/**
+ * Indicates whether the current platform supports a "selct folder" dialog
+ * @return 1 if it supports displaying a folder dialog, 0 otherwise 
+ */
+int system_supports_select_folder_dialog(void);
+
+/**
+ * Shows a "select folder" dialog
+ * @param title Title of the dialog
+ * @param default_path Default path to show
+ * @return The selected folder, or 0 if the dialog was cancelled
+ */
+const char *system_show_select_folder_dialog(const char *title, const char *default_path);
 
 /**
  * Exit the game

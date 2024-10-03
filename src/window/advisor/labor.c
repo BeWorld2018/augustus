@@ -34,13 +34,13 @@ static arrow_button wage_buttons[] = {
     {182, 354, 15, 24, arrow_button_wages, 0, 0}
 };
 
-static int focus_button_id;
-static int arrow_button_focus;
+static unsigned int focus_button_id;
+static unsigned int arrow_button_focus;
 
 static int draw_background(void)
 {
     outer_panel_draw(0, 0, 40, ADVISOR_HEIGHT);
-    image_draw(image_group(GROUP_ADVISOR_ICONS), 10, 10);
+    image_draw(image_group(GROUP_ADVISOR_ICONS), 10, 10, COLOR_MASK_NONE, SCALE_NONE);
 
     lang_text_draw(50, 0, 60, 12, FONT_LARGE_BLACK);
 
@@ -78,13 +78,13 @@ static void draw_foreground(void)
 
     inner_panel_draw(32, 70, 36, 15);
 
-    for (int i = 0; i < 9; i++) {
+    for (unsigned int i = 0; i < 9; i++) {
         int focus = i == focus_button_id - 1;
         int y_offset = 82 + 25 * i;
         button_border_draw(40, 77 + 25 * i, 560, 22, focus);
         const labor_category_data *cat = city_labor_category(i);
         if (cat->priority) {
-            image_draw(image_group(GROUP_LABOR_PRIORITY_LOCK), 70, y_offset - 2);
+            image_draw(image_group(GROUP_LABOR_PRIORITY_LOCK), 70, y_offset - 2, COLOR_MASK_NONE, SCALE_NONE);
             text_draw_number(cat->priority, '@', " ", 90, y_offset, FONT_NORMAL_WHITE, 0);
         }
         lang_text_draw(50, i + 1, 170, y_offset, FONT_NORMAL_WHITE);

@@ -184,6 +184,21 @@ const int *map_grid_adjacent_offsets(int size)
     return ADJACENT_OFFSETS[size];
 }
 
+void map_grid_get_corner_tiles(int start_x, int start_y, int x, int y, int *c1x, int *c1y, int *c2x, int *c2y)
+{
+    if (x - start_x != 0) {
+        *c1x = x;
+        *c1y = y - 1;
+        *c2x = x;
+        *c2y = y + 1;
+    } else {
+        *c1x = x - 1;
+        *c1y = y;
+        *c2x = x + 1;
+        *c2y = y;
+    }
+}
+
 void map_grid_clear_i8(int8_t *grid)
 {
     memset(grid, 0, GRID_SIZE * GRID_SIZE * sizeof(int8_t));
@@ -221,7 +236,7 @@ void map_grid_and_u8(uint8_t *grid, uint8_t mask)
     }
 }
 
-void map_grid_and_u16(uint16_t *grid, uint16_t mask)
+void map_grid_and_u32(uint32_t *grid, uint32_t mask)
 {
     for (int i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
         grid[i] &= mask;

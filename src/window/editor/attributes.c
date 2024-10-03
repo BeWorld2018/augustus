@@ -3,6 +3,7 @@
 #include "core/image.h"
 #include "core/image_group_editor.h"
 #include "core/string.h"
+#include "editor/editor.h"
 #include "game/resource.h"
 #include "graphics/arrow_button.h"
 #include "graphics/button.h"
@@ -20,12 +21,16 @@
 #include "widget/input_box.h"
 #include "widget/minimap.h"
 #include "widget/sidebar/editor.h"
+#include "window/city.h"
 #include "window/editor/allowed_buildings.h"
+#include "window/editor/custom_messages.h"
 #include "window/editor/demand_changes.h"
 #include "window/editor/invasions.h"
 #include "window/editor/map.h"
 #include "window/editor/price_changes.h"
 #include "window/editor/requests.h"
+#include "window/editor/scenario_events.h"
+#include "window/editor/select_custom_message.h"
 #include "window/editor/special_events.h"
 #include "window/editor/starting_conditions.h"
 #include "window/editor/win_criteria.h"
@@ -42,6 +47,13 @@ static void button_win_criteria(int param1, int param2);
 static void button_special_events(int param1, int param2);
 static void button_price_changes(int param1, int param2);
 static void button_demand_changes(int param1, int param2);
+static void button_scenario_events(int param1, int param2);
+static void button_custom_messages(int param1, int param2);
+static void button_change_intro(int param1, int param2);
+static void button_delete_intro(int param1, int param2);
+static void button_change_victory(int param1, int param2);
+static void button_delete_victory(int param1, int param2);
+static void button_return_to_city(int param1, int param2);
 static void change_climate(int param1, int param2);
 static void change_image(int forward, int param2);
 
@@ -56,7 +68,13 @@ static generic_button buttons[] = {
     {212, 356, 250, 30, button_special_events, button_none, 8, 0},
     {212, 396, 250, 30, button_price_changes, button_none, 9, 0},
     {212, 436, 250, 30, button_demand_changes, button_none, 10, 0},
+    {470,  76, 250, 30, button_scenario_events, button_none, 11, 0},
+    {470, 116, 250, 30, button_custom_messages, button_none, 12, 0},
+    {470, 156, 250, 30, button_change_intro, button_delete_intro, 13, 0},
+    {470, 196, 250, 30, button_change_victory, button_delete_victory, 14, 0},
+    {470, 436, 250, 30, button_return_to_city, button_none, 0, 0},
 };
+#define NUMBER_OF_BUTTONS (sizeof(buttons) / sizeof(generic_button))
 
 static arrow_button image_arrows[] = {
     {20, 424, 19, 24, change_image, 0, 0},
@@ -66,18 +84,18 @@ static arrow_button image_arrows[] = {
 static struct {
     int is_paused;
     uint8_t brief_description[BRIEF_DESC_LENGTH];
-    int focus_button_id;
+    unsigned int focus_button_id;
 } data;
 
 static input_box scenario_description_input = {
-    92, 40, 19, 2, FONT_NORMAL_WHITE, 1,
+    200, 40, 19, 2, FONT_NORMAL_WHITE, 1,
     data.brief_description, BRIEF_DESC_LENGTH
 };
 
 static void start(void)
 {
     if (data.is_paused) {
-        input_box_resume(&scenario_description_input);
+        input_box_resume();
     } else {
         string_copy(scenario_brief_description(), data.brief_description, BRIEF_DESC_LENGTH);
         input_box_start(&scenario_description_input);
@@ -87,7 +105,7 @@ static void start(void)
 static void stop(int paused)
 {
     if (paused) {
-        input_box_pause(&scenario_description_input);
+        input_box_pause();
     } else {
         input_box_stop(&scenario_description_input);
     }
@@ -101,10 +119,11 @@ static void draw_background(void)
 
     graphics_in_dialog();
 
-    outer_panel_draw(0, 28, 30, 28);
+    outer_panel_draw(0, 28, 46, 34);
 
     button_border_draw(18, 278, 184, 144, 0);
-    image_draw(image_group(GROUP_EDITOR_SCENARIO_IMAGE) + scenario_image_id(), 20, 280);
+    int group_id = editor_is_active() ? image_group(GROUP_EDITOR_SCENARIO_IMAGE) : image_group(GROUP_SCENARIO_IMAGE);
+    image_draw(group_id + scenario_image_id(), 20, 280, COLOR_MASK_NONE, SCALE_NONE);
 
     graphics_reset_dialog();
 }
@@ -130,8 +149,8 @@ static void draw_foreground(void)
     if (request.resource) {
         lang_text_draw_year(scenario_property_start_year() + request.year, 222, 165, FONT_NORMAL_BLACK);
         int width = text_draw_number(request.amount, '@', " ", 312, 165, FONT_NORMAL_BLACK, 0);
-        int offset = request.resource + resource_image_offset(request.resource, RESOURCE_IMAGE_ICON);
-        image_draw(image_group(GROUP_EDITOR_RESOURCE_ICONS) + offset, 322 + width, 160);
+        image_draw(resource_get_data(request.resource)->image.editor.icon,
+            322 + width, 160, COLOR_MASK_NONE, SCALE_NONE);
     } else {
         lang_text_draw_centered(44, 19, 212, 165, 250, FONT_NORMAL_BLACK);
     }
@@ -168,6 +187,35 @@ static void draw_foreground(void)
     button_border_draw(212, 436, 250, 30, data.focus_button_id == 10);
     lang_text_draw_centered(44, 94, 212, 445, 250, FONT_NORMAL_BLACK);
 
+    button_border_draw(470, 76, 250, 30, data.focus_button_id == 11);
+    lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_SCENARIO_EVENTS_TITLE, 470, 85, 250, FONT_NORMAL_BLACK);
+
+    button_border_draw(470, 116, 250, 30, data.focus_button_id == 12);
+    lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_CUSTOM_MESSAGES_TITLE, 470, 125, 250, FONT_NORMAL_BLACK);
+
+    button_border_draw(470, 156, 250, 30, data.focus_button_id == 13);
+    if (!scenario_editor_get_custom_message_introduction()) {
+        lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_SCENARIO_SELECT_INTRO, 470, 165, 250, FONT_NORMAL_BLACK);
+    } else {
+        text_draw_number(scenario_editor_get_custom_message_introduction(), '@',
+            " ", 470, 165, FONT_NORMAL_BLACK, 0);
+        lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_SCENARIO_DESELECT_INTRO, 490, 165, 230, FONT_NORMAL_BLACK);
+    }
+
+    button_border_draw(470, 196, 250, 30, data.focus_button_id == 14);
+    if (!scenario_editor_get_custom_victory_message()) {
+        lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_SCENARIO_SELECT_VICTORY, 470, 205, 250, FONT_NORMAL_BLACK);
+    } else {
+        text_draw_number(scenario_editor_get_custom_victory_message(), '@',
+            " ", 470, 205, FONT_NORMAL_BLACK, 0);
+        lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_SCENARIO_DESELECT_VICTORY, 490, 205, 230, FONT_NORMAL_BLACK);
+    }
+
+    if (!editor_is_active()) {
+        button_border_draw(470, 436, 250, 30, data.focus_button_id == 15);
+        lang_text_draw_centered(CUSTOM_TRANSLATION, TR_EDITOR_RETURN_TO_CITY, 470, 445, 250, FONT_NORMAL_BLACK);
+    }
+
     arrow_buttons_draw(0, 0, image_arrows, 2);
 
     graphics_reset_dialog();
@@ -176,8 +224,12 @@ static void draw_foreground(void)
 static void handle_input(const mouse *m, const hotkeys *h)
 {
     const mouse *m_dialog = mouse_in_dialog(m);
+    int active_buttons = NUMBER_OF_BUTTONS;
+    if (editor_is_active()) {
+        active_buttons -= 1;
+    }
     if (input_box_handle_mouse(m_dialog, &scenario_description_input) ||
-        generic_buttons_handle_mouse(m_dialog, 0, 0, buttons, 10, &data.focus_button_id) ||
+        generic_buttons_handle_mouse(m_dialog, 0, 0, buttons, active_buttons, &data.focus_button_id) ||
         arrow_buttons_handle_mouse(m_dialog, 0, 0, image_arrows, 2, 0) ||
         widget_sidebar_editor_handle_mouse_attributes(m)) {
         return;
@@ -248,10 +300,62 @@ static void button_demand_changes(int param1, int param2)
     window_editor_demand_changes_show();
 }
 
+static void button_scenario_events(int param1, int param2)
+{
+    stop(0);
+    window_editor_scenario_events_show();
+}
+
+static void button_custom_messages(int param1, int param2)
+{
+    stop(0);
+    window_editor_custom_messages_show();
+}
+
+static void button_change_intro(int param1, int param2)
+{
+    stop(0);
+    if (!scenario_editor_get_custom_message_introduction()) {
+        window_editor_select_custom_message_show(scenario_editor_set_custom_message_introduction);
+    } else {
+        scenario_editor_set_custom_message_introduction(0);
+        window_request_refresh();
+    }
+}
+
+static void button_delete_intro(int param1, int param2)
+{
+    stop(0);
+    scenario_editor_set_custom_message_introduction(0);
+}
+
+static void button_change_victory(int param1, int param2)
+{
+    stop(0);
+    if (!scenario_editor_get_custom_victory_message()) {
+        window_editor_select_custom_message_show(scenario_editor_set_custom_victory_message);
+    } else {
+        scenario_editor_set_custom_victory_message(0);
+        window_request_refresh();
+    }
+}
+
+static void button_delete_victory(int param1, int param2)
+{
+    stop(0);
+    scenario_editor_set_custom_victory_message(0);
+}
+
+static void button_return_to_city(int param1, int param2)
+{
+    stop(0);
+    window_city_show();
+}
+
 static void change_climate(int param1, int param2)
 {
     scenario_editor_cycle_climate();
-    image_load_climate(scenario_property_climate(), 1, 0);
+    image_load_climate(scenario_property_climate(), editor_is_active(), 0, 0);
     widget_minimap_invalidate();
     window_request_refresh();
 }

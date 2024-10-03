@@ -9,6 +9,9 @@ typedef struct {
     int amount;
     int deadline_years;
     int favor;
+    int extension_months_to_comply;
+    int extension_disfavor;
+    int ignored_disfavor;
 } editor_request;
 
 typedef struct {
@@ -30,7 +33,7 @@ typedef struct {
     int year;
     int resource;
     int route_id;
-    int is_rise;
+    int amount;
 } editor_demand_change;
 
 void scenario_editor_create(int map_size);
@@ -62,12 +65,15 @@ void scenario_editor_update_brief_description(const uint8_t *new_description);
 void scenario_editor_set_enemy(int enemy_id);
 
 void scenario_editor_change_empire(int change);
+void scenario_editor_set_custom_empire(const char *file_name);
+void scenario_editor_unset_custom_empire(void);
 
 int scenario_editor_is_building_allowed(int id);
 
 void scenario_editor_toggle_building_allowed(int id);
 
 void scenario_editor_set_player_rank(int rank);
+void scenario_editor_set_caesar_salary(int salary);
 
 void scenario_editor_set_initial_funds(int amount);
 void scenario_editor_set_rescue_loan(int amount);
@@ -99,5 +105,11 @@ void scenario_editor_toggle_time_limit(void);
 void scenario_editor_set_time_limit(int years);
 void scenario_editor_toggle_survival_time(void);
 void scenario_editor_set_survival_time(int years);
+
+int scenario_editor_get_custom_message_introduction(void);
+void scenario_editor_set_custom_message_introduction(int id);
+
+int scenario_editor_get_custom_victory_message(void);
+void scenario_editor_set_custom_victory_message(int id);
 
 #endif // SCENARIO_EDITOR_H

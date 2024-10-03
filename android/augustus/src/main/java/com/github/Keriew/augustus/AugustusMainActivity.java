@@ -2,7 +2,6 @@ package com.github.Keriew.augustus;
 
 import android.content.Intent;
 import android.net.Uri;
-import android.widget.Toast;
 
 import org.libsdl.app.SDLActivity;
 
@@ -25,6 +24,7 @@ public class AugustusMainActivity extends SDLActivity {
         };
     }
 
+    @SuppressWarnings("unused")
     public void showDirectorySelection(boolean again) {
         startActivityForResult(DirectorySelectionActivity.newIntent(this, again), GET_FOLDER_RESULT);
     }
@@ -42,14 +42,7 @@ public class AugustusMainActivity extends SDLActivity {
         }
     }
 
-    public void toastMessage(final String message) {
-        runOnUiThread(new Runnable() {
-            public void run() {
-                Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
-            }
-        });
-    }
-
+    @SuppressWarnings("unused")
     public float getScreenDensity() {
         return getResources().getDisplayMetrics().density;
     }

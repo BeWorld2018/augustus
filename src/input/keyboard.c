@@ -11,9 +11,10 @@ static struct {
     int accepted;
 
     int capture_numeric;
-    void (*capture_numeric_callback)(int);
+    void (*capture_numeric_callback)(int, int);
 
     uint8_t *text;
+    int editing_length;
     int cursor_position;
     int length;
     int max_length;
@@ -149,7 +150,7 @@ void keyboard_stop_capture(void)
     system_stop_text_input();
 }
 
-void keyboard_start_capture_numeric(void (*callback)(int))
+void keyboard_start_capture_numeric(void (*callback)(int, int))
 {
     data.capture_numeric = 1;
     data.capture_numeric_callback = callback;
@@ -360,26 +361,40 @@ static int keyboard_character(uint8_t *text)
     return bytes;
 }
 
-void keyboard_text(const char *text_utf8)
+void keyboard_editing_text(const char *text_utf8)
 {
+    for (int i = 0; i < data.editing_length; i++) {
+        keyboard_backspace();
+    }
+    data.editing_length = keyboard_text(text_utf8);
+}
+
+int keyboard_text(const char *text_utf8)
+{
+    data.editing_length = 0;
     if (data.capture_numeric) {
         char c = text_utf8[0];
         if (c >= '0' && c <= '9') {
-            data.capture_numeric_callback(c - '0');
+            data.capture_numeric_callback(c - '0', 0);
+        } else if (c == '-') {
+            data.capture_numeric_callback(0, 1);
         }
-        return;
+        return 1;
     }
     if (!data.capture) {
-        return;
+        return 1;
     }
 
     uint8_t internal_char[100];
     encoding_from_utf8(text_utf8, internal_char, 100);
 
     int index = 0;
+    int length = 0;
     while (internal_char[index]) {
         index += keyboard_character(&internal_char[index]);
+        length++;
     }
+    return length;
 }
 
 const uint8_t *keyboard_get_text(void)

@@ -7,20 +7,24 @@
 #define MAX_LEGIONS 6
 #define MAX_FORMATION_FIGURES 16
 
+#define NATIVE_FORMATION 0
+
 enum {
     LEGION_RECRUIT_NONE = 0,
     LEGION_RECRUIT_MOUNTED = 1,
     LEGION_RECRUIT_JAVELIN = 2,
-    LEGION_RECRUIT_LEGIONARY = 3
+    LEGION_RECRUIT_LEGIONARY = 3,
+    LEGION_RECRUIT_INFANTRY = 4,
+    LEGION_RECRUIT_ARCHER = 5,
 };
 
-enum {
-    FORMATION_ATTACK_FOOD_CHAIN= 0,
+typedef enum {
+    FORMATION_ATTACK_FOOD_CHAIN = 0,
     FORMATION_ATTACK_GOLD_STORES = 1,
     FORMATION_ATTACK_BEST_BUILDINGS = 2,
     FORMATION_ATTACK_TROOPS = 3,
     FORMATION_ATTACK_RANDOM = 4
-};
+} formation_attack_enum;
 
 enum {
     FORMATION_COLUMN = 0,
@@ -122,15 +126,17 @@ typedef struct {
         int x_home;
         int y_home;
     } prev;
+
+    int target_formation_id;
 } formation;
 
 void formations_clear(void);
 
 void formation_clear(int formation_id);
 
-formation *formation_create_legion(int building_id, int x, int y, figure_type type);
-int formation_create_herd(int figure_type, int x, int y, int num_animals);
-int formation_create_enemy(int figure_type, int x, int y, int layout, int orientation,
+formation *formation_create_legion(int building_id, figure_type type);
+int formation_create_herd(figure_type type, int x, int y, int num_animals);
+int formation_create_enemy(figure_type type, int x, int y, int layout, int orientation,
                            int enemy_type, int attack_type, int invasion_id, int invasion_sequence);
 
 formation *formation_get(int formation_id);
@@ -173,6 +179,7 @@ void formation_clear_monthly_counters(formation *m);
 void formation_set_destination(formation *m, int x, int y);
 void formation_set_destination_building(formation *m, int x, int y, int building_id);
 void formation_set_home(formation *m, int x, int y);
+void formation_retreat(formation *m);
 
 void formation_move_herds_away(int x, int y);
 
@@ -181,6 +188,6 @@ void formation_calculate_figures(void);
 void formation_update_all(int second_time);
 
 void formations_save_state(buffer *buf, buffer *totals);
-void formations_load_state(buffer *buf, buffer *totals, int includes_buffer_size);
+void formations_load_state(buffer *buf, buffer *totals, int version);
 
 #endif // FIGURE_FORMATION_H

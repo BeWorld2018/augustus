@@ -4,16 +4,16 @@
 #include "core/image_group.h" 
 #include "type.h"
 
-#define AUGUSTUS_BUILDINGS 60
+#include <stddef.h>
 
-augustus_building_properties_mapping augustus_building_properties[AUGUSTUS_BUILDINGS] = {
-    {BUILDING_ROADBLOCK, { 1, 1, 0, 0, 0 }, "Roadblocks", 0},
-    {BUILDING_WORKCAMP, { 3, 0, 0, 0, 0 }, "Construction_Guilds", "Workcamp Central"},
-    {BUILDING_GRAND_TEMPLE_CERES, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Ceres Complex Off"},
-    {BUILDING_GRAND_TEMPLE_NEPTUNE, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Neptune Complex Off"},
-    {BUILDING_GRAND_TEMPLE_MERCURY, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Mercury Complex Off"},
-    {BUILDING_GRAND_TEMPLE_MARS, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Mars Complex Off"},
-    {BUILDING_GRAND_TEMPLE_VENUS, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Venus Complex Off"},
+augustus_building_properties_mapping augustus_building_properties[] = {
+    {BUILDING_ROADBLOCK, { 1, 1, 0, 0, 0 }, "Admin_Logistics", 0},
+    {BUILDING_WORKCAMP, { 3, 0, 0, 0, 0 }, "Admin_Logistics", "Workcamp Central"},
+    {BUILDING_GRAND_TEMPLE_CERES, { 7, 1, 0, 0, 0 }, "Monuments", "Ceres Complex Off"},
+    {BUILDING_GRAND_TEMPLE_NEPTUNE, { 7, 1, 0, 0, 0 }, "Monuments", "Neptune Complex Off"},
+    {BUILDING_GRAND_TEMPLE_MERCURY, { 7, 1, 0, 0, 0 }, "Monuments", "Mercury Complex Off"},
+    {BUILDING_GRAND_TEMPLE_MARS, { 7, 1, 0, 0, 0 }, "Monuments", "Mars Complex Off"},
+    {BUILDING_GRAND_TEMPLE_VENUS, { 7, 1, 0, 0, 0 }, "Monuments", "Venus Complex Off"},
     {BUILDING_SMALL_POND, { 2, 1, 0, 0, 0 }, "Aesthetics", "s pond south off"},
     {BUILDING_LARGE_POND, { 3, 1, 0, 0, 0 }, "Aesthetics", "l pond south off"},
     {BUILDING_PINE_TREE, { 1, 1, 0, 0, 0 }, "Aesthetics", "ornamental pine"},
@@ -37,41 +37,68 @@ augustus_building_properties_mapping augustus_building_properties[AUGUSTUS_BUILD
     {BUILDING_PAVILION_ORANGE, { 1, 1, 0, 0, 0 }, "Aesthetics", "pavilion orange"},
     {BUILDING_PAVILION_YELLOW, { 1, 1, 0, 0, 0 }, "Aesthetics", "pavilion yellow"},
     {BUILDING_PAVILION_GREEN, { 1, 1, 0, 0, 0 }, "Aesthetics", "pavilion green"},
-    {BUILDING_SMALL_STATUE_ALT, { 1, 1, 0, 0, 14 }, "Aesthetics", "sml statue 2"},
-    {BUILDING_SMALL_STATUE_ALT_B, { 1, 1, 0, 0, 14 }, "Aesthetics", "sml statue 3"},
+    {BUILDING_SMALL_STATUE_ALT, { 1, 1, 0, 0, 13 }, "Aesthetics", "sml statue 2"},
+    {BUILDING_SMALL_STATUE_ALT_B, { 1, 1, 0, 0, 13 }, "Aesthetics", "sml statue 3"},
     {BUILDING_OBELISK, { 2, 1, 0, 0, 0 }, "Aesthetics", "obelisk"},
-    {BUILDING_PANTHEON, { 7, 1, 0, 0, 0 }, "Grand_Temples", "Pantheon Off"},
-    {BUILDING_ARCHITECT_GUILD, { 2, 1, 0, 0, 0 }, "Construction_Guilds", "Arch Guild OFF"},
-    {BUILDING_MESS_HALL, { 3, 0, 0, 0, 0 }, "Military_Buildings", "Mess OFF Central"},
-    {BUILDING_LIGHTHOUSE, { 3, 1, 0, 0, 0 }, "Econ_Logistics", "Lighthouse OFF"},
-    {BUILDING_TAVERN, { 2, 0, 0, 0, 0 }, "Entertainment", "Tavern OFF"},
+    {BUILDING_PANTHEON, { 7, 1, 0, 0, 0 }, "Monuments", "Pantheon Off"},
+    {BUILDING_ARCHITECT_GUILD, { 2, 1, 0, 0, 0 }, "Admin_Logistics", "Arch Guild OFF"},
+    {BUILDING_MESS_HALL, { 3, 0, 0, 0, 0 }, "Military", "Mess OFF Central"},
+    {BUILDING_LIGHTHOUSE, { 3, 1, 0, 0, 0 }, "Monuments", "Lighthouse OFF"},
+    {BUILDING_TAVERN, { 2, 0, 0, 0, 0 }, "Health_Culture", "Tavern OFF"},
     {BUILDING_GRAND_GARDEN, { 2, 1, 0, 0, 0 }, "", ""},
-    {BUILDING_ARENA, { 3, 0, 0, 0, 0 }, "Entertainment", "Arena OFF" },
+    {BUILDING_ARENA, { 3, 0, 0, 0, 0 }, "Health_Culture", "Arena OFF" },
     {BUILDING_HORSE_STATUE, { 3, 1, 0, 0, 1 }, "Aesthetics", "Eque Statue"},
     {BUILDING_DOLPHIN_FOUNTAIN, { 2, 1, 0, 0, 0 }, "", ""},
     {BUILDING_HEDGE_DARK, { 1, 1, 0, 0, 0 }, "Aesthetics", "D Hedge 01"},
     {BUILDING_HEDGE_LIGHT, { 1, 1, 0, 0, 0 }, "Aesthetics", "L Hedge 01"},
-    {BUILDING_GARDEN_WALL, { 1, 1, 0, 0, 0 }, "Aesthetics", "C Garden Wall 01"},
+    {BUILDING_LOOPED_GARDEN_WALL, { 1, 1, 0, 0, 0 }, "Aesthetics", "C Garden Wall 01"},
     {BUILDING_LEGION_STATUE, { 2, 1, 0, 0, 1 }, "Aesthetics", "legio statue"},
     {BUILDING_DECORATIVE_COLUMN, { 1, 1, 0, 0, 0 }, "Aesthetics", "sml col B"},
     {BUILDING_COLONNADE, { 1, 1, 0, 0, 0 }, "Aesthetics", "G Colonnade 01"},
     {BUILDING_GARDEN_PATH, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden Path 01"},
-    {BUILDING_LARARIUM, {1,0,0,0,0}, "Minor_Monuments", "Lararium 01"},
-    {BUILDING_NYMPHAEUM, {3,0,0,0,0}, "Minor_Monuments", "Nymphaeum OFF"},
-    {BUILDING_SMALL_MAUSOLEUM, {2,1,0,0,1}, "Minor_Monuments", "Mausoleum S"},
-    {BUILDING_LARGE_MAUSOLEUM, {3,1,0,0,0}, "Minor_Monuments", "Mausoleum L"},
-    {BUILDING_WATCHTOWER, {2,1,0,0,0}, "Military_Buildings", "Watchtower C OFF"},
-    {BUILDING_LIBRARY, {2,0,0,0,0}, "Building_Upgrades", "Downgraded_Library"},
-    {BUILDING_CARAVANSERAI, { 4, 1, 0, 0, 0 }, "Econ_Logistics", "Caravanserai N OFF"},
+    {BUILDING_LARARIUM, {1,0,0,0,0}, "Health_Culture", "Lararium 01"},
+    {BUILDING_NYMPHAEUM, {3,1,0,0,0}, "Monuments", "Nymphaeum OFF"},
+    {BUILDING_SMALL_MAUSOLEUM, {2,1,0,0,1}, "Monuments", "Mausoleum S"},
+    {BUILDING_LARGE_MAUSOLEUM, {3,1,0,0,0}, "Monuments", "Mausoleum L"},
+    {BUILDING_WATCHTOWER, {2,1,0,0,0}, "Military", "Watchtower C OFF"},
+    {BUILDING_LIBRARY, {2,0,0,0,0}, "Health_Culture", "Downgraded_Library"},
+    {BUILDING_CARAVANSERAI, { 4, 1, 0, 0, 0 }, "Monuments", "Caravanserai_C_OFF"},
     {BUILDING_SMALL_STATUE, {1,1,0,0,-12}, "Aesthetics", "V Small Statue" },
     {BUILDING_ROOFED_GARDEN_WALL, { 1, 1, 0, 0, 0 }, "Aesthetics", "R Garden Wall 01"},
-    {BUILDING_GARDEN_WALL_GATE, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden Gate"},
-    {BUILDING_PALISADE, {1,1,0,0,0}, "Military_Buildings", "Pal Wall C 01"},
+    {BUILDING_ROOFED_GARDEN_WALL_GATE, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden_Gate_B"},
+    {BUILDING_PALISADE, {1,1,0,0,0}, "Military", "Pal Wall C 01"},
+    {BUILDING_HEDGE_GATE_DARK, { 1, 1, 0, 0, 0 }, "Aesthetics", "D Hedge Gate"},
+    {BUILDING_HEDGE_GATE_LIGHT, { 1, 1, 0, 0, 0 }, "Aesthetics", "L Hedge Gate"},
+    {BUILDING_PALISADE_GATE, {1, 1, 0, 0, 0}, "Military", "Palisade_Gate"},
+    {BUILDING_MEDIUM_STATUE, {2,1,0,0,1}, "Aesthetics", "Med_Statue_R" },
+    {BUILDING_GLADIATOR_STATUE, {1,1,0,0,1}, "Aesthetics", ""},
+    {BUILDING_HIGHWAY, { 2, 1, 0, 0, 0 }, "Admin_Logistics", "Highway_Placement"},
+    {BUILDING_GOLD_MINE, { 2, 0, 0, 0, 0 }, "Industry", "Gold_Mine_C_OFF"},
+    {BUILDING_STONE_QUARRY, { 2, 0, 0, 0, 0 }, "Industry", "Stone_Quarry_C_OFF"},
+    {BUILDING_SAND_PIT, { 2, 0, 0, 0, 0 }, "Industry", "Sand_Pit_C_OFF"},
+    {BUILDING_BRICKWORKS, { 2, 0, 0, 0, 0 }, "Industry", "Brickworks_C_OFF"},
+    {BUILDING_CONCRETE_MAKER, { 2, 0, 0, 0, 0 }, "Industry", "Concrete_Maker_C_OFF"},
+    {BUILDING_CITY_MINT, { 3, 1, 0, 0, 0 }, "Monuments", "City_Mint_ON"},
+    {BUILDING_DEPOT, {2,0,0,0,0}, "Admin_Logistics", "Cart Depot N OFF"},
+    {BUILDING_LOOPED_GARDEN_GATE, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden_Gate"},
+    {BUILDING_PANELLED_GARDEN_GATE, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden_Gate_C"},
+    {BUILDING_PANELLED_GARDEN_WALL, { 1, 1, 0, 0, 0 }, "Aesthetics", "Garden_Wall_C"},
+    {BUILDING_SHRINE_CERES, {1,0,0,0,1}, "Health_Culture", "Altar_Ceres"},
+    {BUILDING_SHRINE_MARS, {1,0,0,0,1}, "Health_Culture", "Altar_Mars"},
+    {BUILDING_SHRINE_MERCURY, {1,0,0,0,1}, "Health_Culture", "Altar_Mercury"},
+    {BUILDING_SHRINE_NEPTUNE, {1,0,0,0,1}, "Health_Culture", "Altar_Neptune"},
+    {BUILDING_SHRINE_VENUS, {1,0,0,0,1}, "Health_Culture", "Altar_Venus"},
+    {BUILDING_OVERGROWN_GARDENS, {1, 1, 0, 0, 0}, "Aesthetics", "Overgrown_Garden_01"},
+    {BUILDING_FORT_AUXILIA_INFANTRY, {3,1,0,0,0}, "Military", 0},
+    {BUILDING_FORT_ARCHERS, {3,1,0,0,0}, "Military", 0},
+    {BUILDING_ARMOURY, {2,0,0,0,0}, "Military", "Armoury_OFF_C"}
 };
 
-void init_augustus_building_properties()
+#define AUGUSTUS_BUILDINGS (sizeof(augustus_building_properties) / sizeof(augustus_building_properties_mapping))
+
+void init_augustus_building_properties(void)
 {
-    for (int i = 0; i < AUGUSTUS_BUILDINGS; ++i) {
+    for (size_t i = 0; i < AUGUSTUS_BUILDINGS; ++i) {
         if (augustus_building_properties[i].asset_image_id) {
             augustus_building_properties[i].properties.image_group =
                 assets_get_image_id(augustus_building_properties[i].asset_name,
@@ -83,7 +110,7 @@ void init_augustus_building_properties()
     }
 }
 
-static building_properties properties[170] = {
+static building_properties properties[BUILDING_TYPE_MAX] = {
     // SZ FIRE GRP OFF
         {0, 0,   0, 0, 0 },
         {0, 0,   0, 0, 0 },
@@ -150,11 +177,11 @@ static building_properties properties[170] = {
         {2, 0,  73, 0, 0 },
         {2, 0,  74, 0, 0 },
         {2, 0,  75, 0, 0 },
-        {3, 0,  71, 1, 0 },
-        {3, 0,  72, 1, 0 },
-        {3, 0,  73, 1, 0 },
-        {3, 0,  74, 1, 0 },
-        {3, 0,  75, 1, 0 },
+        {3, 1,  71, 1, 0 },
+        {3, 1,  72, 1, 0 },
+        {3, 1,  73, 1, 0 },
+        {3, 1,  74, 1, 0 },
+        {3, 1,  75, 1, 0 },
         {2, 0,  22, 0, 0 },
         {3, 0,  99, 0, 0 },
         {1, 1,  82, 0, 0 },
@@ -183,7 +210,7 @@ static building_properties properties[170] = {
         {3, 0, 166, 0, 0 },
         {0, 0,   0, 0, 0 },
         {0, 0,   0, 0, 0 },
-        {2, 0,  76, 0, 0 },
+        {2, 1,  76, 0, 0 },
         {1, 1,   0, 0, 0 },
         {3, 0,  37, 0, 0 },
         {3, 0,  37, 0, 0 },
@@ -221,22 +248,6 @@ static building_properties properties[170] = {
         {1, 1,   0, 0, 0 },
         {1, 1,   0, 0, 0 },
         {1, 1,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
-        {0, 0,   0, 0, 0 },
 };
 
 static int is_vanilla_building_with_changed_properties(building_type type)
@@ -244,6 +255,7 @@ static int is_vanilla_building_with_changed_properties(building_type type)
     switch (type) {
         case BUILDING_LIBRARY:
         case BUILDING_SMALL_STATUE:
+        case BUILDING_MEDIUM_STATUE:
             return 1;
         default:
             return 0;
@@ -252,11 +264,11 @@ static int is_vanilla_building_with_changed_properties(building_type type)
 
 const building_properties *building_properties_for_type(building_type type)
 {
-    if (type < 0 || type > BUILDING_TYPE_MAX) {
+    if (type > BUILDING_TYPE_MAX) {
         return &properties[0];
     }
     if (type >= BUILDING_ROADBLOCK || is_vanilla_building_with_changed_properties(type)) {
-        for (int i = 0; i < AUGUSTUS_BUILDINGS; ++i) {
+        for (size_t i = 0; i < AUGUSTUS_BUILDINGS; ++i) {
             if (augustus_building_properties[i].type == type) {
                 return &augustus_building_properties[i].properties;
             }

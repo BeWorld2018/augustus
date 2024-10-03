@@ -11,7 +11,7 @@ void keyboard_resume_capture(void);
 void keyboard_pause_capture(void);
 void keyboard_stop_capture(void);
 
-void keyboard_start_capture_numeric(void (*callback)(int));
+void keyboard_start_capture_numeric(void (*callback)(int, int));
 void keyboard_stop_capture_numeric(void);
 
 int keyboard_input_is_accepted(void);
@@ -32,7 +32,8 @@ void keyboard_right(void);
 void keyboard_home(void);
 void keyboard_end(void);
 
-void keyboard_text(const char *text_utf8);
+void keyboard_editing_text(const char *text_utf8);
+int keyboard_text(const char *text_utf8);
 
 const uint8_t *keyboard_get_text(void);
 void keyboard_set_text(const uint8_t *text);

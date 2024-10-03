@@ -17,7 +17,7 @@ enum {
     BIT_ALTERNATE_TERRAIN = 0x20,
     BIT_DELETED = 0x40,
     BIT_NO_DELETED = 0xbf,
-    BIT_PLAZA_OR_EARTHQUAKE = 0x80,
+    BIT_PLAZA_EARTHQUAKE_OR_OVERGROWN_GARDEN = 0x80,
     BIT_NO_PLAZA = 0x7f,
     BIT_NO_CONSTRUCTION_AND_DELETED = 0xaf,
     EDGE_MASK_X = 0x7,
@@ -43,6 +43,12 @@ static int edge_for(int x, int y)
 int map_property_is_draw_tile(int grid_offset)
 {
     return edge_grid.items[grid_offset] & EDGE_LEFTMOST_TILE;
+}
+
+int map_property_is_draw_tile_from_buffer(buffer *edge, int grid_offset)
+{
+    buffer_set(edge, grid_offset);
+    return buffer_read_u8(edge) & EDGE_LEFTMOST_TILE;
 }
 
 void map_property_mark_draw_tile(int grid_offset)
@@ -117,6 +123,19 @@ int map_property_multi_tile_size(int grid_offset)
     }
 }
 
+int map_property_multi_tile_size_from_buffer(buffer *bitfields, int grid_offset)
+{
+    buffer_set(bitfields, grid_offset);
+    switch (buffer_read_u8(bitfields) & BIT_SIZES) {
+        case BIT_SIZE2: return 2;
+        case BIT_SIZE3: return 3;
+        case BIT_SIZE4: return 4;
+        case BIT_SIZE5: return 5;
+        case BIT_SIZE7: return 7;
+        default: return 1;
+    }
+}
+
 void map_property_set_multi_tile_size(int grid_offset, int size)
 {
     bitfields_grid.items[grid_offset] &= BIT_NO_SIZES;
@@ -149,17 +168,17 @@ int map_property_is_alternate_terrain(int grid_offset)
     return bitfields_grid.items[grid_offset] & BIT_ALTERNATE_TERRAIN;
 }
 
-int map_property_is_plaza_or_earthquake(int grid_offset)
+int map_property_is_plaza_earthquake_or_overgrown_garden(int grid_offset)
 {
-    return bitfields_grid.items[grid_offset] & BIT_PLAZA_OR_EARTHQUAKE;
+    return bitfields_grid.items[grid_offset] & BIT_PLAZA_EARTHQUAKE_OR_OVERGROWN_GARDEN;
 }
 
-void map_property_mark_plaza_or_earthquake(int grid_offset)
+void map_property_mark_plaza_earthquake_or_overgrown_garden(int grid_offset)
 {
-    bitfields_grid.items[grid_offset] |= BIT_PLAZA_OR_EARTHQUAKE;
+    bitfields_grid.items[grid_offset] |= BIT_PLAZA_EARTHQUAKE_OR_OVERGROWN_GARDEN;
 }
 
-void map_property_clear_plaza_or_earthquake(int grid_offset)
+void map_property_clear_plaza_earthquake_or_overgrown_garden(int grid_offset)
 {
     bitfields_grid.items[grid_offset] &= BIT_NO_PLAZA;
 }

@@ -1,7 +1,10 @@
 #ifndef SCENARIO_DATA_H
 #define SCENARIO_DATA_H
 
+#include "core/file.h"
 #include "map/point.h"
+#include "scenario/message_media_text_blob.h"
+#include "scenario/property.h"
 #include "scenario/types.h"
 
 #include <stdint.h>
@@ -10,6 +13,7 @@
 #define MAX_INVASIONS 20
 #define MAX_DEMAND_CHANGES 20
 #define MAX_PRICE_CHANGES 20
+#define MAX_CUSTOM_VARIABLES 100
 
 #define MAX_HERD_POINTS 4
 #define MAX_FISH_POINTS 8
@@ -96,6 +100,9 @@ typedef struct {
     int state;
     int visible;
     int months_to_comply;
+    int extension_months_to_comply;
+    int extension_disfavor;
+    int ignored_disfavor;
 } request_t;
 
 typedef struct {
@@ -120,15 +127,45 @@ typedef struct {
     int month;
     int resource;
     int route_id;
-    int is_rise;
+    int amount;
 } demand_change_t;
+
+#define DEMAND_CHANGE_LEGACY_IS_RISE 9999
+#define DEMAND_CHANGE_LEGACY_IS_FALL -9999
+
+typedef struct {
+    struct win_criteria_t population;
+    struct win_criteria_t culture;
+    struct win_criteria_t prosperity;
+    struct win_criteria_t peace;
+    struct win_criteria_t favor;
+    struct {
+        int enabled;
+        int years;
+    } time_limit;
+    struct {
+        int enabled;
+        int years;
+    } survival_time;
+    int milestone25_year;
+    int milestone50_year;
+    int milestone75_year;
+} scenario_win_criteria;
+
+typedef struct {
+    int id;
+    int in_use;
+    int value;
+    const text_blob_string_t *linked_uid;
+} custom_variable_t;
 
 extern struct scenario_t {
     uint8_t scenario_name[MAX_SCENARIO_NAME];
 
     int start_year;
-    int climate;
+    scenario_climate climate;
     int player_rank;
+    uint16_t caesar_salary;
 
     int initial_funds;
     int rescue_loan;
@@ -140,25 +177,10 @@ extern struct scenario_t {
     int enemy_id;
     int is_open_play;
     int open_play_scenario_id;
+    int intro_custom_message_id;
+    int victory_custom_message_id;
 
-    struct {
-        struct win_criteria_t population;
-        struct win_criteria_t culture;
-        struct win_criteria_t prosperity;
-        struct win_criteria_t peace;
-        struct win_criteria_t favor;
-        struct {
-            int enabled;
-            int years;
-        } time_limit;
-        struct {
-            int enabled;
-            int years;
-        } survival_time;
-        int milestone25_year;
-        int milestone50_year;
-        int milestone75_year;
-    } win_criteria;
+    scenario_win_criteria win_criteria;
 
     struct {
         int id;
@@ -166,7 +188,10 @@ extern struct scenario_t {
         int expansion_year;
         int distant_battle_roman_travel_months;
         int distant_battle_enemy_travel_months;
+        char custom_name[FILE_NAME_MAX];
     } empire;
+
+    custom_variable_t custom_variables[MAX_CUSTOM_VARIABLES];
 
     request_t requests[MAX_REQUESTS];
 
@@ -195,7 +220,9 @@ extern struct scenario_t {
         int sea_trade_problem;
         int land_trade_problem;
         int raise_wages;
+        int max_wages;
         int lower_wages;
+        int min_wages;
         int contaminated_water;
         int iron_mine_collapse;
         int clay_pit_flooded;
@@ -226,15 +253,18 @@ extern struct scenario_t {
     } native_images;
 
     struct { // used to be stored in the settings file
-        int campaign_rank;
-        int campaign_mission;
         int is_custom;
         int starting_favor;
         int starting_personal_savings;
         uint8_t player_name[MAX_PLAYER_NAME];
-        /** Temp storage for carrying over player name to next campaign mission */
-        uint8_t campaign_player_name[MAX_PLAYER_NAME];
     } settings;
+
+    struct {
+        int rank;
+        int mission;
+        /** Temp storage for carrying over player name to next campaign mission */
+        uint8_t player_name[MAX_PLAYER_NAME];
+    } campaign;
 
     int is_saved;
 } scenario;

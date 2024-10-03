@@ -15,16 +15,28 @@
 void trade_prices_reset(void);
 
 /**
+ * Get the base buy price for the resource, without any discounts or penalties applied
+ * @param resource Resource
+ */
+int trade_price_base_buy(resource_type resource);
+
+/**
  * Get the buy price for the resource
  * @param resource Resource
- * @param int land_trader 1 if land_trader 0 else sea_trader
+ * @param land_trader 1 if land_trader 0 else sea_trader
  */
 int trade_price_buy(resource_type resource, int land_trader);
 
 /**
+ * Get the base sell price for the resource, without any discounts or penalties applied
+ * @param resource Resource
+ */
+int trade_price_base_sell(resource_type resource);
+
+/**
  * Get the sell price for the resource
  * @param resource Resource
- * @param int land_trader 1 if land_trader 0 else sea_trader
+ * @param land_trader 1 if land_trader 0 else sea_trader
  */
 int trade_price_sell(resource_type resource, int land_trader);
 
@@ -35,6 +47,22 @@ int trade_price_sell(resource_type resource, int land_trader);
  * @return True if the price has been changed
  */
 int trade_price_change(resource_type resource, int amount);
+
+/**
+ * Change only the buy price of a resource
+ * @param resource Resource to change
+ * @param new_price The new price to set it to
+ * @return True if the price has been changed
+ */
+int trade_price_set_buy(resource_type resource, int new_price);
+
+/**
+ * Change only the sell price of a resource
+ * @param resource Resource to change
+ * @param new_price The new price to set it to
+ * @return True if the price has been changed
+ */
+int trade_price_set_sell(resource_type resource, int new_price);
 
 /**
  * Save trade prices to buffer

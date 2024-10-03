@@ -10,6 +10,14 @@
  * Calculation functions.
  */
 
+
+/**
+ * Calculates the number of digits a value has
+ * @param value Value to calculate the number of digits
+ * @return The number of digits, including the minus sign if negative
+ */
+int calc_digits_in_number(int value);
+
 /**
  * Adjusts the value with the percentage
  * @param value Value to adjust
@@ -39,6 +47,11 @@ int calc_value_in_step(int value, int step);
  * @return max(dx, dy)
  */
 int calc_maximum_distance(int x1, int y1, int x2, int y2);
+
+/**
+ * Gets the distance between two boxes
+ */
+int calc_box_distance(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh);
 
 /**
  * Gets the general direction from 'from' to 'to'

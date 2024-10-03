@@ -1,5 +1,6 @@
 #include "emperor.h"
 
+#include "campaign/campaign.h"
 #include "city/data_private.h"
 #include "city/finance.h"
 #include "city/message.h"
@@ -13,7 +14,16 @@
 
 #define RANKS 11
 
-const int SALARY_FOR_RANK[11] = {0, 2, 5, 8, 12, 20, 30, 40, 60, 80, 100};
+static const int SALARY_PERCENTAGE_FOR_RANK[11] = {0, 2, 5, 8, 12, 20, 30, 40, 60, 80, 100};
+
+static const struct {
+    int base;
+    int savings_divisor ;
+} GIFT_DATA[GIFT_MAX] = {
+    {20, 8},
+    {50, 4},
+    {100, 2}
+};
 
 static int cheated_invasion = 0;
 
@@ -22,8 +32,12 @@ void city_emperor_init_scenario(int rank)
     city_data.ratings.favor = scenario_starting_favor();
     city_data.emperor.personal_savings = scenario_starting_personal_savings();
     city_data.emperor.player_rank = rank;
+    city_data.emperor.caesar_salary = scenario_property_caesar_salary();
+    if (city_data.emperor.caesar_salary == 0) {
+        city_data.emperor.caesar_salary = 100;
+    }
     int salary_rank = rank;
-    if (scenario_is_custom()) {
+    if (scenario_is_custom() && !campaign_is_active()) {
         city_data.emperor.personal_savings = 0;
         city_data.emperor.player_rank = scenario_property_player_rank();
         salary_rank = scenario_property_player_rank();
@@ -94,15 +108,15 @@ static void process_caesar_invasion(void)
     if (city_data.figure.imperial_soldiers && !cheated_invasion) {
         // caesar invasion in progress
         city_data.emperor.invasion.duration_day_countdown--;
-        if (city_data.ratings.favor >= 35 && city_data.emperor.invasion.duration_day_countdown < 176) {
-            formation_caesar_pause();
-        } else if (city_data.ratings.favor >= 22) {
+        if (city_data.ratings.favor >= difficulty_favor_to_stop_emperor_attack() && city_data.emperor.invasion.duration_day_countdown < 176) {
+            formation_caesar_retreat();
+            if (!city_data.emperor.invasion.retreat_message_shown) {
+                city_data.emperor.invasion.retreat_message_shown = 1;
+                city_message_post(1, MESSAGE_CAESAR_ARMY_RETREAT, 0, 0);
+            }
+        } else if (city_data.ratings.favor >= difficulty_favor_to_pause_emperor_attack()) {
             if (city_data.emperor.invasion.duration_day_countdown > 0) {
-                formation_caesar_retreat();
-                if (!city_data.emperor.invasion.retreat_message_shown) {
-                    city_data.emperor.invasion.retreat_message_shown = 1;
-                    city_message_post(1, MESSAGE_CAESAR_ARMY_RETREAT, 0, 0);
-                }
+                formation_caesar_pause();
             } else if (city_data.emperor.invasion.duration_day_countdown == 0) {
                 // a year has passed (11 months), siege goes on
                 city_message_post(1, MESSAGE_CAESAR_ARMY_CONTINUE, 0, 0);
@@ -113,7 +127,7 @@ static void process_caesar_invasion(void)
         // player defeated caesar army
         city_data.emperor.invasion.size = 0;
         city_data.emperor.invasion.soldiers_killed = 0;
-        if (city_data.ratings.favor < 35) {
+        if (city_data.ratings.favor < difficulty_favor_to_stop_emperor_attack()) {
             city_ratings_change_favor(10);
             if (city_data.emperor.invasion.count < 2) {
                 city_message_post(1, MESSAGE_CAESAR_RESPECT_1, 0, 0);
@@ -129,7 +143,7 @@ static void process_caesar_invasion(void)
             city_data.emperor.invasion.warnings_given++;
             city_data.emperor.invasion.days_until_invasion = 192;
             if (city_data.emperor.invasion.warnings_given <= 1) {
-                city_message_post(1, MESSAGE_CAESAR_WRATH, 0, 0);
+                city_message_post(1, MESSAGE_CAESAR_ANGER, 0, 0);
             }
         }
     } else {
@@ -202,9 +216,9 @@ int city_emperor_can_send_gift(int size)
 void city_emperor_calculate_gift_costs(void)
 {
     int savings = city_data.emperor.personal_savings;
-    city_data.emperor.gifts[GIFT_MODEST].cost = savings / 8 + 20;
-    city_data.emperor.gifts[GIFT_GENEROUS].cost = savings / 4 + 50;
-    city_data.emperor.gifts[GIFT_LAVISH].cost = savings / 2 + 100;
+    city_data.emperor.gifts[GIFT_MODEST].cost = savings/ GIFT_DATA[GIFT_MODEST].savings_divisor + calc_adjust_with_percentage(GIFT_DATA[GIFT_MODEST].base, city_data.emperor.caesar_salary);
+    city_data.emperor.gifts[GIFT_GENEROUS].cost = savings / GIFT_DATA[GIFT_GENEROUS].savings_divisor + calc_adjust_with_percentage(GIFT_DATA[GIFT_GENEROUS].base, city_data.emperor.caesar_salary);
+    city_data.emperor.gifts[GIFT_LAVISH].cost = savings / GIFT_DATA[GIFT_LAVISH].savings_divisor + calc_adjust_with_percentage(GIFT_DATA[GIFT_LAVISH].base, city_data.emperor.caesar_salary);
 }
 
 void city_emperor_send_gift(void)
@@ -274,13 +288,13 @@ int city_emperor_months_since_gift(void)
 
 int city_emperor_salary_for_rank(int rank)
 {
-    return SALARY_FOR_RANK[rank];
+    return calc_adjust_with_percentage(city_data.emperor.caesar_salary, SALARY_PERCENTAGE_FOR_RANK[rank]);
 }
 
 void city_emperor_set_salary_rank(int rank)
 {
     city_data.emperor.salary_rank = rank;
-    city_data.emperor.salary_amount = SALARY_FOR_RANK[rank];
+    city_data.emperor.salary_amount = city_emperor_salary_for_rank(rank);
 }
 
 int city_emperor_salary_rank(void)
@@ -296,7 +310,7 @@ int city_emperor_salary_amount(void)
 int city_emperor_rank_for_salary_paid(int salary)
 {
     for (int i = 0; i < RANKS; i++) {
-        if (salary <= SALARY_FOR_RANK[i]*12) {
+        if (salary <= calc_adjust_with_percentage(city_data.emperor.caesar_salary, SALARY_PERCENTAGE_FOR_RANK[i]) * 12) {
             return i;
         }
     }
@@ -307,6 +321,14 @@ int city_emperor_rank_for_salary_paid(int salary)
 int city_emperor_personal_savings(void)
 {
     return city_data.emperor.personal_savings;
+}
+
+void city_emperor_add_personal_savings(int amount)
+{
+    city_data.emperor.personal_savings += amount;
+    if (city_data.emperor.personal_savings < 0) {
+        city_data.emperor.personal_savings = 0;
+    }
 }
 
 int city_emperor_rank(void)

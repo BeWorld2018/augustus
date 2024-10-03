@@ -11,6 +11,8 @@
  */
 int map_building_at(int grid_offset);
 
+int map_building_from_buffer(buffer *buildings, int grid_offset);
+
 void map_building_set(int grid_offset, int building_id);
 
 /**
@@ -30,11 +32,6 @@ void map_set_rubble_building_type(int grid_offset, building_type type);
  * Clears the maps related to buildings
  */
 void map_building_clear(void);
-
-void map_highlight_set(int grid_offset);
-void map_highlight_clear(int grid_offset);
-int map_is_highlighted(int grid_offset);
-void map_clear_highlights(void);
 
 void map_building_save_state(buffer *buildings, buffer *damage);
 

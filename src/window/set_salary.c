@@ -35,7 +35,7 @@ static generic_button buttons[] = {
     {144, 285, 352, 20, button_set_salary, button_none, 10, 0},
 };
 
-static int focus_button_id;
+static unsigned int focus_button_id;
 
 static int get_dialog_width(void)
 {
@@ -57,12 +57,12 @@ static void draw_foreground(void)
     int dialog_width = get_dialog_width();
     int dialog_x = 128 - (dialog_width - MIN_DIALOG_WIDTH) / 2;
     outer_panel_draw(dialog_x, 32, dialog_width / BLOCK_SIZE, 25);
-    image_draw(image_group(GROUP_RESOURCE_ICONS) + RESOURCE_DENARII, dialog_x + 16, 48);
+    image_draw(resource_get_data(RESOURCE_DENARII)->image.icon, dialog_x + 16, 48, COLOR_MASK_NONE, SCALE_NONE);
     lang_text_draw_centered(52, 15, dialog_x + 48, 48, dialog_width - 64, FONT_LARGE_BLACK);
 
     inner_panel_draw(144, 80, 22, 15);
 
-    for (int rank = 0; rank < 11; rank++) {
+    for (unsigned int rank = 0; rank < 11; rank++) {
         font_t font = focus_button_id == rank + 2 ? FONT_NORMAL_RED : FONT_NORMAL_WHITE;
         int width = lang_text_draw(52, rank + 4, 176, 90 + 20 * rank, font);
         text_draw_money(city_emperor_salary_for_rank(rank), 176 + width, 90 + 20 * rank, font);

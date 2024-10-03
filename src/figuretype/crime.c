@@ -41,23 +41,28 @@ typedef struct {
     int resource;
 } looter_destination;
 
-int get_looter_destination(figure *f)
+static int get_looter_destination(figure *f)
 {
-    inventory_storage_info info[INVENTORY_MAX];
-    looter_destination possible_destinations[INVENTORY_MAX];
-    if (!building_distribution_get_inventory_storages(info, 0,
-        0, f->x, f->y, MAX_LOOTING_DISTANCE)) {
+    resource_storage_info info[RESOURCE_MAX] = { 0 };
+
+    // Check everything
+    for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
+        info[r].needed = 1;
+    }
+
+    looter_destination possible_destinations[RESOURCE_MAX];
+    if (!building_distribution_get_resource_storages_for_figure(info, 0, 0, f, MAX_LOOTING_DISTANCE)) {
         return 0;
     }
 
-    int resource = 0;
+    resource_type resource = RESOURCE_NONE;
     int building_id = 0;
     int options = 0;
 
-    for (int i = 0; i < INVENTORY_MAX; ++i) {
-        if (info[i].building_id > 0) {
-            possible_destinations[options].building_id = info[i].building_id;
-            possible_destinations[options].resource = i;
+    for (resource_type r = RESOURCE_MIN; r < RESOURCE_MAX; r++) {
+        if (info[r].building_id > 0) {
+            possible_destinations[options].building_id = info[r].building_id;
+            possible_destinations[options].resource = r;
             options += 1;
         }
     }
@@ -67,7 +72,7 @@ int get_looter_destination(figure *f)
         building_id = possible_destinations[random_index].building_id;
 
         building *storage = building_get(building_id);
-        resource = resource_from_inventory(possible_destinations[random_index].resource);
+        resource = possible_destinations[random_index].resource;
 
         f->destination_x = storage->road_access_x;
         f->destination_y = storage->road_access_y;
@@ -80,16 +85,16 @@ int get_looter_destination(figure *f)
     }
 }
 
-void figure_crime_loot_storage(figure *f, int resource, int building_id)
+static void loot_storage(figure *f, int resource, int building_id)
 {
     building *storage = building_get(building_id);
 
     if (storage->type == BUILDING_GRANARY) {
         building_granary_remove_resource(storage, resource, 100);
-        city_warning_show(WARNING_GRANARY_BREAKIN);
+        city_warning_show(WARNING_GRANARY_BREAKIN, NEW_WARNING_SLOT);
     } else {
         building_warehouse_remove_resource(storage, resource, 1);
-        city_warning_show(WARNING_WAREHOUSE_BREAKIN);
+        city_warning_show(WARNING_WAREHOUSE_BREAKIN, NEW_WARNING_SLOT);
     }
 
     city_message_apply_sound_interval(MESSAGE_CAT_THEFT);
@@ -109,7 +114,7 @@ static void figure_crime_steal_money(figure *f)
     }
     city_message_apply_sound_interval(MESSAGE_CAT_THEFT);
     city_message_post_with_popup_delay(MESSAGE_CAT_THEFT, MESSAGE_THEFT, money_stolen, f->grid_offset);
-    city_warning_show(WARNING_THEFT);
+    city_warning_show(WARNING_THEFT, NEW_WARNING_SLOT);
     city_finance_process_stolen(money_stolen);
 }
 
@@ -275,7 +280,7 @@ void figure_generate_criminals(void)
 
 void figure_protestor_action(figure *f)
 {
-    f->terrain_usage = TERRAIN_USAGE_ROADS;
+    f->terrain_usage = TERRAIN_USAGE_ROADS_HIGHWAY;
     figure_image_increase_offset(f, 64);
     city_figures_add_protester();
     f->cart_image_id = 0;
@@ -387,7 +392,7 @@ void figure_rioter_action(figure *f)
 void figure_robber_action(figure *f)
 {
     city_figures_add_robber(!f->targeted_by_figure_id);
-    f->terrain_usage = TERRAIN_USAGE_PREFER_ROADS;
+    f->terrain_usage = TERRAIN_USAGE_PREFER_ROADS_HIGHWAY;
     f->max_roam_length = 480;
     f->cart_image_id = 0;
     f->is_ghost = 0;
@@ -438,7 +443,7 @@ void figure_robber_action(figure *f)
 void figure_looter_action(figure *f)
 {
     city_figures_add_looter(!f->targeted_by_figure_id);
-    f->terrain_usage = TERRAIN_USAGE_PREFER_ROADS;
+    f->terrain_usage = TERRAIN_USAGE_PREFER_ROADS_HIGHWAY;
     f->max_roam_length = 480;
     f->cart_image_id = 0;
     f->is_ghost = 0;
@@ -469,7 +474,7 @@ void figure_looter_action(figure *f)
             figure_image_increase_offset(f, 12);
             figure_movement_move_ticks(f, 1);
             if (f->direction == DIR_FIGURE_AT_DESTINATION) {
-                figure_crime_loot_storage(f, f->collecting_item_id, f->destination_building_id);
+                loot_storage(f, f->collecting_item_id, f->destination_building_id);
                 f->state = FIGURE_STATE_DEAD;
             } else if (f->direction == DIR_FIGURE_REROUTE) {
                 figure_route_remove(f);

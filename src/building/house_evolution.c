@@ -13,6 +13,7 @@
 #include "map/building.h"
 #include "map/grid.h"
 #include "map/routing_terrain.h"
+#include "map/terrain.h"
 #include "map/tiles.h"
 
 #define DEVOLVE_DELAY 2
@@ -100,6 +101,9 @@ static int has_required_goods_and_services(building *house, int for_upgrade, int
     }
     // religion
     int religion = model->religion;
+    if (religion > 3) {
+        religion = 3;
+    }
     if (house->data.house.num_gods < religion) {
         if (religion == 1) {
             ++demands->missing.religion;
@@ -107,7 +111,7 @@ static int has_required_goods_and_services(building *house, int for_upgrade, int
         } else if (religion == 2) {
             ++demands->missing.second_religion;
             return 0;
-        } else if (religion == 3) {
+        } else if (religion >= 3) {
             ++demands->missing.third_religion;
             return 0;
         }
@@ -148,8 +152,8 @@ static int has_required_goods_and_services(building *house, int for_upgrade, int
     // food types
     int foodtypes_required = model->food_types;
     int foodtypes_available = 0;
-    for (int i = INVENTORY_MIN_FOOD; i < INVENTORY_MAX_FOOD; i++) {
-        if (house->data.house.inventory[i]) {
+    for (resource_type r = RESOURCE_MIN_FOOD; r < RESOURCE_MAX_FOOD; r++) {
+        if (house->resources[r] && resource_is_inventory(r)) {
             foodtypes_available++;
         }
     }
@@ -158,17 +162,17 @@ static int has_required_goods_and_services(building *house, int for_upgrade, int
         return 0;
     }
     // goods
-    if (house->data.house.inventory[INVENTORY_POTTERY] < model->pottery) {
+    if (house->resources[RESOURCE_POTTERY] < model->pottery) {
         return 0;
     }
-    if (house->data.house.inventory[INVENTORY_OIL] < model->oil) {
+    if (house->resources[RESOURCE_OIL] < model->oil) {
         return 0;
     }
-    if (house->data.house.inventory[INVENTORY_FURNITURE] < model->furniture) {
+    if (house->resources[RESOURCE_FURNITURE] < model->furniture) {
         return 0;
     }
     int wine = model->wine;
-    if (wine && house->data.house.inventory[INVENTORY_WINE] <= 0) {
+    if (wine && house->resources[RESOURCE_WINE] <= 0) {
         return 0;
     }
     if (wine > 1 && !city_resource_multiple_wine_available()) {
@@ -496,40 +500,47 @@ static int evolve_luxury_palace(building *house, house_demands *demands)
 static void consume_resource(building *b, int inventory, int amount)
 {
     if (amount > 0) {
-        if (amount > b->data.house.inventory[inventory]) {
-            b->data.house.inventory[inventory] = 0;
+        if (amount > b->resources[inventory]) {
+            b->resources[inventory] = 0;
         } else {
-            b->data.house.inventory[inventory] -= amount;
+            b->resources[inventory] -= amount;
         }
     }
 }
 
 static void consume_resources(building *b)
 {
-    int consumption_reduction[INVENTORY_MAX] = { 0 };
+    int consumption_reduction[RESOURCE_MAX] = { 0 };
 
     // mercury module 1 - pottery and furniture reduced by 20%
     if (building_monument_gt_module_is_active(MERCURY_MODULE_1_POTTERY_FURN)) {
-        consumption_reduction[INVENTORY_POTTERY] += 20;
-        consumption_reduction[INVENTORY_FURNITURE] += 20;
+        consumption_reduction[RESOURCE_POTTERY] += 20;
+        consumption_reduction[RESOURCE_FURNITURE] += 20;
     }
     // mercury module 2 - oil and wine reduced by 20%
     if (b->data.house.temple_mercury && building_monument_gt_module_is_active(MERCURY_MODULE_2_OIL_WINE)) {
-        consumption_reduction[INVENTORY_WINE] += 20;
-        consumption_reduction[INVENTORY_OIL] += 20;
+        consumption_reduction[RESOURCE_WINE] += 20;
+        consumption_reduction[RESOURCE_OIL] += 20;
     }
     // mars module 2 - all goods reduced by 10% 
     if (b->data.house.temple_mars && building_monument_gt_module_is_active(MARS_MODULE_2_ALL_GOODS)) {
-        consumption_reduction[INVENTORY_WINE] += 10;
-        consumption_reduction[INVENTORY_OIL] += 10;
-        consumption_reduction[INVENTORY_POTTERY] += 10;
-        consumption_reduction[INVENTORY_FURNITURE] += 10;
+        consumption_reduction[RESOURCE_WINE] += 10;
+        consumption_reduction[RESOURCE_OIL] += 10;
+        consumption_reduction[RESOURCE_POTTERY] += 10;
+        consumption_reduction[RESOURCE_FURNITURE] += 10;
     }
 
-    for (inventory_type inventory = INVENTORY_MIN_GOOD; inventory < INVENTORY_MAX_GOOD; inventory++) {
-        if (!consumption_reduction[inventory] ||
-            (game_time_total_months() % (100 / consumption_reduction[inventory]))) {
-            consume_resource(b, inventory, model_house_uses_inventory(b->subtype.house_level, inventory));
+    for (resource_type r = RESOURCE_MIN_NON_FOOD; r < RESOURCE_MAX_NON_FOOD; r++) {
+        if (!resource_is_inventory(r)) {
+            continue;
+        }
+        // mars module 2 - all goods reduced by 10% 
+        if (b->data.house.temple_mars && building_monument_gt_module_is_active(MARS_MODULE_2_ALL_GOODS)) {
+            consumption_reduction[r] += 10;
+        }
+        if (!consumption_reduction[r] ||
+            (game_time_total_months() % (100 / consumption_reduction[r]))) {
+            consume_resource(b, r, model_house_uses_inventory(b->subtype.house_level, r));
         }
     }
 }
@@ -564,8 +575,11 @@ void building_house_process_evolve_and_consume_goods(void)
                 continue;
             }
             building_house_check_for_corruption(b);
-            has_expanded |= evolve_callback[b->type - BUILDING_HOUSE_VACANT_LOT](b, demands);
-            if (game_time_day() == 0 || game_time_day() == 7) {
+            if (!b->has_plague) {
+                has_expanded |= evolve_callback[b->type - BUILDING_HOUSE_VACANT_LOT](b, demands);
+            }
+            // 1x1 houses only consume half of the goods
+            if (game_time_day() == 0 || (game_time_day() == 7 && b->house_size > 1)) {
                 consume_resources(b);
             }
             b->last_update = last_update;
@@ -623,8 +637,8 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
     // food types
     int foodtypes_required = model->food_types;
     int foodtypes_available = 0;
-    for (int i = INVENTORY_MIN_FOOD; i < INVENTORY_MAX_FOOD; i++) {
-        if (house->data.house.inventory[i]) {
+    for (resource_type r = RESOURCE_MIN_FOOD; r < RESOURCE_MAX_FOOD; r++) {
+        if (house->resources[r] && resource_is_inventory(r)) {
             foodtypes_available++;
         }
     }
@@ -665,12 +679,15 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
         return;
     }
     // pottery
-    if (house->data.house.inventory[INVENTORY_POTTERY] < model->pottery) {
+    if (house->resources[RESOURCE_POTTERY] < model->pottery) {
         house->data.house.evolve_text_id = 19;
         return;
     }
     // religion
     int religion = model->religion;
+    if (religion > 3) {
+        religion = 3;
+    }
     if (house->data.house.num_gods < religion) {
         if (religion == 1) {
             house->data.house.evolve_text_id = 20;
@@ -701,18 +718,18 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
         return;
     }
     // oil
-    if (house->data.house.inventory[INVENTORY_OIL] < model->oil) {
+    if (house->resources[RESOURCE_OIL] < model->oil) {
         house->data.house.evolve_text_id = 27;
         return;
     }
     // furniture
-    if (house->data.house.inventory[INVENTORY_FURNITURE] < model->furniture) {
+    if (house->resources[RESOURCE_FURNITURE] < model->furniture) {
         house->data.house.evolve_text_id = 28;
         return;
     }
     // wine
     int wine = model->wine;
-    if (house->data.house.inventory[INVENTORY_WINE] < wine) {
+    if (house->resources[RESOURCE_WINE] < wine) {
         house->data.house.evolve_text_id = 29;
         return;
     }
@@ -720,7 +737,7 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
         house->data.house.evolve_text_id = 65;
         return;
     }
-    if (level >= HOUSE_LUXURY_PALACE) { // max level!
+    if (house->subtype.house_level >= HOUSE_LUXURY_PALACE) { // max level!
         house->data.house.evolve_text_id = 60;
         return;
     }
@@ -804,12 +821,15 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
         return;
     }
     // pottery
-    if (house->data.house.inventory[INVENTORY_POTTERY] < model->pottery) {
+    if (house->resources[RESOURCE_POTTERY] < model->pottery) {
         house->data.house.evolve_text_id = 49;
         return;
     }
     // religion
     religion = model->religion;
+    if (religion > 3) {
+        religion = 3;
+    }
     if (house->data.house.num_gods < religion) {
         if (religion == 1) {
             house->data.house.evolve_text_id = 50;
@@ -840,18 +860,18 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
         return;
     }
     // oil
-    if (house->data.house.inventory[INVENTORY_OIL] < model->oil) {
+    if (house->resources[RESOURCE_OIL] < model->oil) {
         house->data.house.evolve_text_id = 57;
         return;
     }
     // furniture
-    if (house->data.house.inventory[INVENTORY_FURNITURE] < model->furniture) {
+    if (house->resources[RESOURCE_FURNITURE] < model->furniture) {
         house->data.house.evolve_text_id = 58;
         return;
     }
     // wine
     wine = model->wine;
-    if (house->data.house.inventory[INVENTORY_WINE] < wine) {
+    if (house->resources[RESOURCE_WINE] < wine) {
         house->data.house.evolve_text_id = 59;
         return;
     }
@@ -867,42 +887,60 @@ void building_house_determine_evolve_text(building *house, int worst_desirabilit
     }
 }
 
-int building_house_determine_worst_desirability_building(const building *house)
+static building_type get_building_type_at_tile(const building *house, int x, int y)
+{
+    int grid_offset = map_grid_offset(x, y);
+    int building_id = map_building_at(grid_offset);
+    if (building_id <= 0) {
+        if (map_terrain_is(grid_offset, TERRAIN_HIGHWAY)) {
+            return BUILDING_HIGHWAY;
+        } else {
+            return BUILDING_NONE;
+        }
+    }
+    building *b = building_get(building_id);
+    if (b->state != BUILDING_STATE_IN_USE || building_id == house->id) {
+        return BUILDING_NONE;
+    }
+    if (b->house_size && b->type >= house->type) {
+        return BUILDING_NONE;
+    }
+    return b->type;
+}
+
+building_type building_house_determine_worst_desirability_building_type(const building *house)
 {
     int lowest_desirability = 0;
-    int lowest_building_id = 0;
+    building_type lowest_building_type = BUILDING_NONE;
     int x_min, y_min, x_max, y_max;
     map_grid_get_area(house->x, house->y, 1, 6, &x_min, &y_min, &x_max, &y_max);
 
     for (int y = y_min; y <= y_max; y++) {
         for (int x = x_min; x <= x_max; x++) {
-            int building_id = map_building_at(map_grid_offset(x, y));
-            if (building_id <= 0) {
-                continue;
-            }
-            building *b = building_get(building_id);
-            if (b->state != BUILDING_STATE_IN_USE || building_id == house->id) {
-                continue;
-            }
-            if (!b->house_size || b->type < house->type) {
-                int des = model_get_building(b->type)->desirability_value;
-                if (des < 0) {
-                    // simplified desirability calculation
-                    int step_size = model_get_building(b->type)->desirability_step_size;
-                    int range = model_get_building(b->type)->desirability_range;
-                    int dist = calc_maximum_distance(x, y, house->x, house->y);
-                    if (dist <= range) {
-                        while (--dist > 1) {
-                            des += step_size;
-                        }
-                        if (des < lowest_desirability) {
-                            lowest_desirability = des;
-                            lowest_building_id = building_id;
-                        }
+            building_type type = get_building_type_at_tile(house, x, y);
+            const model_building *model = model_get_building(type);
+            // simplified desirability calculation
+            int des = model->desirability_value;
+            int step = model->desirability_step;
+            int step_size = model->desirability_step_size;
+            int range = model->desirability_range;
+            int tiles_within_step = 0;
+            int dist = calc_maximum_distance(x, y, house->x, house->y);
+            if (dist <= range) {
+                while (dist >= 1) {
+                    tiles_within_step++;
+                    if (tiles_within_step >= step) {
+                        des += step_size;
+                        tiles_within_step = 0;
                     }
+                    dist--;
+                }
+                if (des < lowest_desirability) {
+                    lowest_desirability = des;
+                    lowest_building_type = type;
                 }
             }
         }
     }
-    return lowest_building_id;
+    return lowest_building_type;
 }

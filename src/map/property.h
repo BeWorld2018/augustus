@@ -16,6 +16,7 @@ enum {
 };
 
 int map_property_is_draw_tile(int grid_offset);
+int map_property_is_draw_tile_from_buffer(buffer *edge, int grid_offset);
 void map_property_mark_draw_tile(int grid_offset);
 void map_property_clear_draw_tile(int grid_offset);
 
@@ -31,14 +32,15 @@ void map_property_set_multi_tile_xy(int grid_offset, int x, int y, int is_draw_t
 void map_property_clear_multi_tile_xy(int grid_offset);
 
 int map_property_multi_tile_size(int grid_offset);
+int map_property_multi_tile_size_from_buffer(buffer *bitfields, int grid_offset);
 void map_property_set_multi_tile_size(int grid_offset, int size);
 
 void map_property_init_alternate_terrain(void);
 int map_property_is_alternate_terrain(int grid_offset);
 
-int map_property_is_plaza_or_earthquake(int grid_offset);
-void map_property_mark_plaza_or_earthquake(int grid_offset);
-void map_property_clear_plaza_or_earthquake(int grid_offset);
+int map_property_is_plaza_earthquake_or_overgrown_garden(int grid_offset);
+void map_property_mark_plaza_earthquake_or_overgrown_garden(int grid_offset);
+void map_property_clear_plaza_earthquake_or_overgrown_garden(int grid_offset);
 
 
 int map_property_is_constructing(int grid_offset);

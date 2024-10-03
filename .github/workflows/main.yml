@@ -13,20 +13,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Linux Flatpak
+            os: ubuntu-20.04
+            BUILD_TARGET: flatpak
+            DEPLOY: flatpak
           - name: Linux AppImage
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             BUILD_TARGET: appimage
             DEPLOY: appimage
           - name: Linux x64
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cache-key: linux-x64
-            SDL_VERSION: 2.0.16
-            SDL_MIXER_VERSION: 2.0.4
-            MPG123_VERSION: 1.26.5
+            SDL_VERSION: 2.30.4
+            SDL_MIXER_VERSION: 2.8.0
             BUILD_TARGET: linux
             DEPLOY: linux
           - name: Linux x64 (old SDL versions)
-            os: ubuntu-18.04
+            os: ubuntu-20.04
             cache-key: linux-x64
             SDL_VERSION: 2.0.0
             SDL_MIXER_VERSION: 2.0.0
@@ -36,8 +39,8 @@ jobs:
           - name: macOS
             os: macos-latest
             cache-key: macos
-            SDL_VERSION: 2.0.16
-            SDL_MIXER_VERSION: 2.0.4
+            SDL_VERSION: 2.30.4
+            SDL_MIXER_VERSION: 2.8.0
             BUILD_TARGET: mac
             DEPLOY: mac
           - name: PS Vita
@@ -51,16 +54,13 @@ jobs:
           - name: Android
             os: ubuntu-20.04
             cache-key: android
-            SDL_VERSION: 2.0.16
-            SDL_MIXER_VERSION: 2.0.4
+            SDL_VERSION: 2.30.4
+            SDL_MIXER_VERSION: 2.8.0
             BUILD_TARGET: android
             DEPLOY: android
           - name: Emscripten
-            os: ubuntu-20.04
+            os: ubuntu-22.04
             cache-key: emscripten
-            SDL_VERSION: 2.0.16
-            SDL_MIXER_VERSION: 2.0.4
-            MPG123_VERSION: 1.26.5
             BUILD_TARGET: emscripten
             DEPLOY: emscripten
     name: ${{ matrix.name }}
@@ -68,19 +68,26 @@ jobs:
     env:
       SDL_VERSION: ${{ matrix.SDL_VERSION }}
       SDL_MIXER_VERSION: ${{ matrix.SDL_MIXER_VERSION }}
-      MPG123_VERSION: ${{ matrix.MPG123_VERSION }}
       BUILD_TARGET: ${{ matrix.BUILD_TARGET }}
       DEPLOY: ${{ matrix.DEPLOY }}
       SKIP_UPLOAD: ${{ matrix.SKIP_UPLOAD }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         if: ${{ matrix.cache-key }}
         with:
           path: deps
-          key: ${{ matrix.cache-key }}-${{ env.SDL_VERSION }}-${{ env.SDL_MIXER_VERSION }}-${{ env.MPG123_VERSION }}
+          key: ${{ matrix.cache-key }}-${{ env.SDL_VERSION }}-${{ env.SDL_MIXER_VERSION }}
+      - name: Setup JDK 17
+        if: matrix.BUILD_TARGET == 'android'
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
       - name: Set up environment
         env:
           FILE_ENCRYPTION_IV: ${{ secrets.FILE_ENCRYPTION_IV }}
@@ -93,6 +100,7 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEYSTORE_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_KEY_PASSWORD }}
         run: |
+          ./.ci_scripts/pack_assets.sh
           ./.ci_scripts/run_cmake.sh
           ./.ci_scripts/run_build.sh
       - name: Upload development artifacts
@@ -100,8 +108,9 @@ jobs:
           UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
         run: |
           ./.ci_scripts/build_upload.sh
+        continue-on-error: true
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: deploy/
@@ -110,32 +119,54 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows 32-bit
+          - name: Windows MinGW x86
             cache-key: mingw
             COMPILER: mingw-32
-          - name: Windows 64-bit
+          - name: Windows MinGW x64
             cache-key: mingw
             COMPILER: mingw-64
             SKIP_UPLOAD: true
-          - name: Windows MSVC
+          - name: Windows MSVC x64
             cache-key: msvc
             COMPILER: msvc
             SKIP_UPLOAD: true
+          - name: Windows MSVC ARM64
+            cache-key: msvc-arm64
+            COMPILER: msvc-arm64
     name: ${{ matrix.name }}
     runs-on: windows-latest
     env:
-      SDL_VERSION: 2.0.16
-      SDL_MIXER_VERSION: 2.0.4
+      SDL_VERSION: 2.30.4
+      SDL_MIXER_VERSION: 2.8.0
       COMPILER: ${{ matrix.COMPILER }}
       SKIP_UPLOAD: ${{ matrix.SKIP_UPLOAD }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Cache dependencies
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: deps
           key: windows-${{ matrix.cache-key }}-${{ env.SDL_VERSION }}-${{ env.SDL_MIXER_VERSION }}
+      - name: Set up MSYS2
+        if: matrix.COMPILER == 'mingw-32'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: mingw32
+          location: D:\
+          install: mingw-w64-i686-gcc
+          update: true
+      - name: Install cv2pdb
+        if: matrix.COMPILER == 'mingw-32' || matrix.COMPILER == 'mingw-64'
+        uses: robinraju/release-downloader@v1.8
+        with:
+          repository: "rainers/cv2pdb"
+          tag: "v0.52"
+          fileName: "cv2pdb-0.52.zip"
+          out-file-path: "build"
+          extract: true
       - name: Set up environment
         run: ./.ci_scripts/install_sdl.ps1
       - name: Build and test
@@ -144,14 +175,18 @@ jobs:
         env:
           UPLOAD_TOKEN: ${{ secrets.UPLOAD_TOKEN }}
         run: ./.ci_scripts/build_upload.ps1
+        continue-on-error: true
       - name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: deploy\
-      - uses: actions/setup-ruby@v1
+      - uses: ruby/setup-ruby@v1
+        if: matrix.COMPILER == 'mingw-64'
+        with:
+          ruby-version: '3.0'
       - name: Send Webhook Notification
-        if: always()
+        if: matrix.COMPILER == 'mingw-64'
         env:
           JOB_STATUS: ${{ job.status }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}

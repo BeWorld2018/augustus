@@ -15,8 +15,6 @@
 #include "race_bet.h"
 #include "translation/translation.h"
 
-static translation_key button_tooltips[] = {TR_WINDOW_RACE_BET_BLUE_HORSE, TR_WINDOW_RACE_BET_RED_HORSE, TR_WINDOW_RACE_BET_WHITE_HORSE, TR_WINDOW_RACE_BET_GREEN_HORSE};
-static translation_key team_descriptions[] = { TR_WINDOW_RACE_BLUE_HORSE_DESCRIPTION, TR_WINDOW_RACE_RED_HORSE_DESCRIPTION, TR_WINDOW_RACE_WHITE_HORSE_DESCRIPTION, TR_WINDOW_RACE_GREEN_HORSE_DESCRIPTION };
 static void arrow_button_bet(int is_down, int param2);
 static void button_horse_selection(int option, int param2);
 static void button_confirm(int option, int param2);
@@ -43,18 +41,18 @@ static image_button image_button_close[] = {
 
 
 static struct {
-    int chosen_horse;
-    int bet_amount;
+    unsigned int chosen_horse;
+    unsigned int bet_amount;
     int in_progress_bet;
-    int focus_button_id;
-    int focus_button_id2;
-    int focus_button_id3;
-    int focus_image_button_id;
+    unsigned int focus_button_id;
+    unsigned int focus_button_id2;
+    unsigned int focus_button_id3;
+    unsigned int focus_image_button_id;
     int width_blocks;
     int height_blocks;
 } data;
 
-static int init()
+static int init(void)
 {
     if (window_is(WINDOW_RACE_BET)) {
         // don't show popup over popup
@@ -78,11 +76,11 @@ static void draw_background(void)
 
     outer_panel_draw(0, 0, data.width_blocks, data.height_blocks);
 
-    image_draw(image_group(GROUP_RESOURCE_ICONS) + RESOURCE_DENARII, 20, 20);
+    image_draw(resource_get_data(RESOURCE_DENARII)->image.icon, 20, 20, COLOR_MASK_NONE, SCALE_NONE);
 
     text_draw_centered(translation_for(TR_WINDOW_RACE_BET_TITLE), 0, 20, BLOCK_SIZE * data.width_blocks, FONT_LARGE_BLACK, 0);
 
-    text_draw_multiline(translation_for(TR_WINDOW_RACE_BET_DESCRIPTION), 25, 65, 438, FONT_NORMAL_BLACK, 0);
+    text_draw_multiline(translation_for(TR_WINDOW_RACE_BET_DESCRIPTION), 25, 65, 438, 0, FONT_NORMAL_BLACK, 0);
 
     inner_panel_draw(18, 300, 28, 2);
     text_draw_centered(translation_for(TR_WINDOW_RACE_BET_AMOUNT), 18, 310, 80, FONT_NORMAL_WHITE, 0);
@@ -92,15 +90,25 @@ static void draw_background(void)
 
     translation_key horse_description = 0;
     if (data.focus_button_id) {
-        horse_description = team_descriptions[data.focus_button_id - 1];
+        horse_description = TR_WINDOW_RACE_BLUE_HORSE_DESCRIPTION + data.focus_button_id - 1;
     } else if (data.chosen_horse) {
-        horse_description = team_descriptions[data.chosen_horse - 1];
+        horse_description = TR_WINDOW_RACE_BLUE_HORSE_DESCRIPTION + data.chosen_horse - 1;
     }
     if (horse_description) {
-        text_draw_multiline(translation_for(horse_description), 25, 250, 438, FONT_NORMAL_BLACK, 0);
+        text_draw_multiline(translation_for(horse_description), 25, 250, 438, 0, FONT_NORMAL_BLACK, 0);
     }
 
-    text_draw_centered(translation_for(data.in_progress_bet ? TR_WINDOW_IN_PROGRESS_BET_BUTTON : TR_WINDOW_RACE_BET_BUTTON), 90, 358, 300, FONT_NORMAL_BLACK, 0);
+    int button_enabled = data.bet_amount > 0 && data.chosen_horse != 0 && !data.in_progress_bet;
+
+    text_draw_centered(translation_for(data.in_progress_bet ? TR_WINDOW_IN_PROGRESS_BET_BUTTON :
+        TR_WINDOW_RACE_BET_BUTTON), 90, 358, 300, button_enabled ? FONT_NORMAL_BLACK : FONT_NORMAL_PLAIN,
+        button_enabled ? 0 : COLOR_FONT_LIGHT_GRAY);
+
+    int image_id = assets_get_image_id("UI", "Hipp_Team_Blue");
+
+    for (int i = 0; i < 4; i++) {
+        image_draw(image_id + i, 39 + i * 110, 150, COLOR_MASK_NONE, SCALE_NONE);
+    }
 
     graphics_reset_dialog();
 }
@@ -109,18 +117,19 @@ static void draw_foreground(void)
 {
     graphics_in_dialog_with_size(BLOCK_SIZE * data.width_blocks, BLOCK_SIZE * data.height_blocks);
 
-    int image_id = assets_get_image_id("UI_Elements", "Hipp_Blues_UH");
-    int image_id_focus = assets_get_image_id("UI_Elements", "Hipp_Blues_H");
+    int border_id = assets_get_image_id("UI", "Image Border Small");
 
-    for (int i = 0; i < 4; i++) {
-        int slice_id = (2 * i);
-        int id = data.focus_button_id == (i + 1) || data.chosen_horse == (i + 1) ? image_id_focus : image_id;
-        image_draw(id + slice_id, 34 + i * 110, 145);
+    for (unsigned int i = 0; i < 4; i++) {
+        color_t color = data.focus_button_id == (i + 1) || data.chosen_horse == (i + 1) ?
+            COLOR_BORDER_RED : COLOR_BORDER_GREEN;
+        image_draw_border(border_id, 34 + i * 110, 145, color);
     }
 
     arrow_buttons_draw(0, 0, amount_buttons, 2);
 
-    button_border_draw(90, 354, 300, 20, !data.in_progress_bet && data.focus_button_id3 == 1);
+    int button_enabled = data.bet_amount > 0 && data.chosen_horse != 0 && !data.in_progress_bet;
+
+    button_border_draw(90, 354, 300, 20, button_enabled && data.focus_button_id3 == 1);
     image_buttons_draw(0, 0, image_button_close, 1);
 
     graphics_reset_dialog();
@@ -183,7 +192,7 @@ static void handle_tooltip(tooltip_context *c)
         c->text_id = 2;
     } else if (data.focus_button_id) {
         c->type = TOOLTIP_BUTTON;
-        c->translation_key = button_tooltips[data.focus_button_id - 1];
+        c->translation_key = TR_WINDOW_RACE_BET_BLUE_HORSE + data.focus_button_id - 1;
     }
 }
 
@@ -192,7 +201,7 @@ static void button_close(int param1, int param2)
     window_go_back();
 }
 
-void window_race_bet_show()
+void window_race_bet_show(void)
 {
     if (init()) {
         window_type window = {

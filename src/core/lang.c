@@ -1,6 +1,6 @@
-#include "building/type.h"
 #include "core/lang.h"
 
+#include "building/building.h"
 #include "core/buffer.h"
 #include "core/file.h"
 #include "core/io.h"
@@ -45,10 +45,7 @@ static struct {
 static int file_exists_in_dir(const char *dir, const char *file)
 {
     char path[2 * FILE_NAME_MAX];
-    path[2 * FILE_NAME_MAX - 1] = 0;
-    strncpy(path, dir, 2 * FILE_NAME_MAX - 1);
-    strncat(path, "/", 2 * FILE_NAME_MAX - 1);
-    strncat(path, file, 2 * FILE_NAME_MAX - 1);
+    snprintf(path, 2 * FILE_NAME_MAX, "%s/%s", dir, file);
     return file_exists(path, NOT_LOCALIZED);
 }
 
@@ -146,7 +143,7 @@ static void set_message_parameters(lang_message *m, int title, int text, int urg
 }
 
 
-void load_custom_messages(void)
+void load_augustus_messages(void)
 {
     int i = 321;
     while (i < MAX_MESSAGE_ENTRIES) {
@@ -271,6 +268,43 @@ void load_custom_messages(void)
             MESSAGE_TYPE_GENERAL);
         i += 1;
     }
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_SICKNESS, TR_CITY_MESSAGE_TEXT_SICKNESS, 1, MESSAGE_TYPE_DISASTER);
+    i += 1;
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_EMPERORS_WRATH, TR_CITY_MESSAGE_TEXT_EMPERORS_WRATH, 1, MESSAGE_TYPE_GENERAL);
+    m->video.text = (uint8_t *) "smk/Emp_send_army.smk";
+    m->urgent = 1;
+    i += 1;
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_MARS_MINOR_CURSE_PREVENTED, TR_CITY_MESSAGE_TEXT_MARS_MINOR_CURSE_PREVENTED, 1, MESSAGE_TYPE_GENERAL);
+    i += 1;
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_ENEMIES_LEAVING, TR_CITY_MESSAGE_TEXT_ENEMIES_LEAVING, 1, MESSAGE_TYPE_GENERAL);
+    i += 1;
+
+    m = &data.message_entries[i];
+    m->urgent = 1;
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_ROAD_TO_ROME_WARNING, TR_CITY_MESSAGE_TEXT_ROAD_TO_ROME_WARNING, 1, MESSAGE_TYPE_GENERAL);
+    i += 1;
+
+    // Custom message placeholder (MESSAGE_CUSTOM_MESSAGE = 160). Actual displayed text is determined by the contents of the custom message being displayed.
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_EDITOR_CUSTOM_MESSAGES_TITLE, TR_EDITOR_CUSTOM_MESSAGES_TITLE, 0, MESSAGE_TYPE_CUSTOM);
+    i += 1;
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_TRADE_ROUTE_PRICE_CHANGE, TR_CITY_MESSAGE_TEXT_TRADE_ROUTE_PRICE_CHANGE, 0, MESSAGE_TYPE_ROUTE_PRICE_CHANGE);
+    i += 1;
+
+    m = &data.message_entries[i];
+    set_message_parameters(m, TR_CITY_MESSAGE_TITLE_MONUMENT_COMPLETE, TR_CITY_MESSAGE_TEXT_CARAVANSERAI_COMPLETE, 0,
+        MESSAGE_TYPE_GENERAL);
+    i += 1;
 }
 
 
@@ -288,12 +322,12 @@ static int load_message(const char *filename, int localizable, uint8_t *data_buf
 
 static int load_files(const char *text_filename, const char *message_filename, int localizable)
 {
-    uint8_t *buffer = (uint8_t *) malloc(BUFFER_SIZE);
-    if (!buffer) {
+    uint8_t *buf = (uint8_t *) malloc(BUFFER_SIZE);
+    if (!buf) {
         return 0;
     }
-    int success = load_text(text_filename, localizable, buffer) && load_message(message_filename, localizable, buffer);
-    free(buffer);
+    int success = load_text(text_filename, localizable, buf) && load_message(message_filename, localizable, buf);
+    free(buf);
     return success;
 }
 
@@ -329,9 +363,6 @@ const uint8_t *lang_get_string(int group, int index)
     }
     if (group == 96 && !index) {
         return translation_for(TR_BUILDING_SMALL_TEMPLE_VENUS_NAME);
-    }
-    if (group == 23 && index == 6 && scenario_building_allowed(BUILDING_WHARF)) {
-        return translation_for(TR_RESOURCE_FISH);
     }
 
     if (group == 130) {
@@ -450,7 +481,7 @@ const uint8_t *lang_get_string(int group, int index)
                 return translation_for(TR_BUILDING_HEDGE_DARK);
             case BUILDING_HEDGE_LIGHT:
                 return translation_for(TR_BUILDING_HEDGE_LIGHT);
-            case BUILDING_GARDEN_WALL:
+            case BUILDING_LOOPED_GARDEN_WALL:
                 return translation_for(TR_BUILDING_GARDEN_WALL);
             case BUILDING_LEGION_STATUE:
                 return translation_for(TR_BUILDING_LEGION_STATUE);
@@ -474,10 +505,70 @@ const uint8_t *lang_get_string(int group, int index)
                 return translation_for(TR_BUILDING_CARAVANSERAI);
             case BUILDING_ROOFED_GARDEN_WALL:
                 return translation_for(TR_BUILDING_ROOFED_GARDEN_WALL);
-            case BUILDING_GARDEN_WALL_GATE:
+            case BUILDING_ROOFED_GARDEN_WALL_GATE:
                 return translation_for(TR_BUILDING_GARDEN_WALL_GATE);
             case BUILDING_PALISADE:
                 return translation_for(TR_BUILDING_PALISADE);
+            case BUILDING_GLADIATOR_STATUE:
+                return translation_for(TR_BUILDING_GLADIATOR_STATUE);
+            case BUILDING_HIGHWAY:
+                return translation_for(TR_BUILDING_HIGHWAY);
+            case BUILDING_GOLD_MINE:
+                return translation_for(TR_BUILDING_GOLD_MINE);
+            case BUILDING_CITY_MINT:
+                return translation_for(TR_BUILDING_CITY_MINT);
+            case BUILDING_DEPOT:
+                return translation_for(TR_BUILDING_DEPOT);
+            case BUILDING_STONE_QUARRY:
+                return translation_for(TR_BUILDING_STONE_QUARRY);
+            case BUILDING_SAND_PIT:
+                return translation_for(TR_BUILDING_SAND_PIT);
+            case BUILDING_BRICKWORKS:
+                return translation_for(TR_BUILDING_BRICKWORKS);
+            case BUILDING_CONCRETE_MAKER:
+                return translation_for(TR_BUILDING_CONCRETE_MAKER);
+            case BUILDING_LOOPED_GARDEN_GATE:
+                return translation_for(TR_BUILDING_LOOPED_GARDEN_WALL_GATE);
+            case BUILDING_PANELLED_GARDEN_WALL:
+                return translation_for(TR_BUILDING_PANELLED_GARDEN_WALL);
+            case BUILDING_PANELLED_GARDEN_GATE:
+                return translation_for(TR_BUILDING_PANELLED_GARDEN_WALL_GATE);
+            case BUILDING_SHRINE_CERES:
+                return translation_for(TR_BUILDING_SHRINE_CERES);
+            case BUILDING_SHRINE_MARS:
+                return translation_for(TR_BUILDING_SHRINE_MARS);
+            case BUILDING_SHRINE_MERCURY:
+                return translation_for(TR_BUILDING_SHRINE_MERCURY);
+            case BUILDING_SHRINE_NEPTUNE:
+                return translation_for(TR_BUILDING_SHRINE_NEPTUNE);
+            case BUILDING_SHRINE_VENUS:
+                return translation_for(TR_BUILDING_SHRINE_VENUS);
+            case BUILDING_MENU_SHRINES:
+                return translation_for(TR_BUILDING_MENU_SHRINES);
+            case BUILDING_MENU_GARDENS:
+                if (group == 28) {
+                    index = BUILDING_GARDENS;
+                }
+                break;
+            case BUILDING_GARDENS:
+                if (group == 28) {
+                    return translation_for(TR_BUILDING_FORMAL_GARDENS);
+                }
+                break;
+            case BUILDING_OVERGROWN_GARDENS:
+                return translation_for(TR_BUILDING_OVERGROWN_GARDENS);
+            case BUILDING_FORT_AUXILIA_INFANTRY:
+                return translation_for(TR_BUILDING_FORT_AUXILIA_INFANTRY);
+            case BUILDING_ARMOURY:
+                return translation_for(TR_BUILDING_ARMOURY);
+            case BUILDING_FORT_ARCHERS:
+                return translation_for(TR_BUILDING_FORT_ARCHERS);
+            case BUILDING_FORT_LEGIONARIES:
+                return translation_for(TR_BUILDING_FORT_LEGIONARIES);
+            case BUILDING_FORT_MOUNTED:
+                return translation_for(TR_BUILDING_FORT_MOUNTED);
+            case BUILDING_FORT_JAVELIN:
+                return translation_for(TR_BUILDING_FORT_JAVELIN);
             default:
                 break;
         }
@@ -496,6 +587,16 @@ const uint8_t *lang_get_string(int group, int index)
         ++str;
     }
     return str;
+}
+
+const uint8_t *lang_get_building_type_string(int type)
+{
+    if (building_is_house(type) || type == BUILDING_NATIVE_HUT ||
+        type == BUILDING_NATIVE_MEETING || type == BUILDING_NATIVE_CROPS) {
+        return lang_get_string(41, type);
+    } else {
+        return lang_get_string(28, type);
+    }
 }
 
 const lang_message *lang_get_message(int id)

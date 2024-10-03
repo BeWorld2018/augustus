@@ -2,6 +2,7 @@
 
 #include "building/image.h"
 #include "building/industry.h"
+#include "core/calc.h"
 #include "core/image.h"
 #include "core/image_group.h"
 #include "map/building_tiles.h"
@@ -66,9 +67,8 @@ void map_image_update_all(void)
             continue;
         }
         if (building_is_farm(b->type)) {
-            map_building_tiles_add_farm(b->id, b->x, b->y,
-                image_group(GROUP_BUILDING_FARM_CROPS) + 5 * (b->output_resource_id - 1),
-                b->data.industry.progress);
+            map_building_tiles_add_farm(b->id, b->x, b->y, building_image_get_base_farm_crop(b->type),
+                calc_percentage(b->data.industry.progress, building_industry_get_max_progress(b)));
             continue;
         }
         int image_id = building_image_get(b);
@@ -86,17 +86,7 @@ void map_image_save_state_legacy(buffer *buf)
     map_grid_save_state_u32_to_u16(images.items, buf);
 }
 
-void map_image_save_state(buffer *buf)
-{
-    map_grid_save_state_u32(images.items, buf);
-}
-
 void map_image_load_state_legacy(buffer *buf)
 {
     map_grid_load_state_u16_to_u32(images.items, buf);
-}
-
-void map_image_load_state(buffer *buf)
-{
-    map_grid_load_state_u32(images.items, buf);
 }

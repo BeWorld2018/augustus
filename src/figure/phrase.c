@@ -11,11 +11,12 @@
 #include "city/resource.h"
 #include "city/sentiment.h"
 #include "core/calc.h"
+#include "core/file.h"
 #include "figure/trader.h"
 #include "figuretype/trader.h"
 #include "sound/speech.h"
 
-#include <string.h>
+#include <stdio.h>
 
 #define SOUND_FILENAME_MAX 32
 
@@ -254,9 +255,9 @@ static const int FIGURE_TYPE_TO_SOUND_TYPE[] = {
     18, -1, 1, 25, 25, 25, 25, 25, 25, 25, // 40-49
     25, 25, 25, 25, 25, 25, 25, 25, -1, -1, // 50-59
     -1, -1, -1, -1, 30, -1, 31, -1, -1, -1, // 60-69
-    -1, -1, -1, 18, 19, 2, 1, 19, 8, 11,  // 70-79
-    11, -1, 1, -1, -1, 19, 20, 19, 19, 19,  // 80-89
-    -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, // 90-99
+    -1, -1, -1, 19, 19, 2, 1, 19, 8, 11,  // 70-79
+    11, -1, 1, -1, -1, 19, 20, 20, 19, 19,  // 80-89
+    19, -1, -1, 22, 25, -1, -1, -1, -1, -1, // 90-99
 };
 
 enum {
@@ -268,9 +269,8 @@ enum {
 static void play_sound_file(int sound_id, int phrase_id)
 {
     if (sound_id >= 0 && phrase_id >= 0) {
-        char path[SOUND_FILENAME_MAX];
-        strcpy(path, "wavs/");
-        strcat(path, FIGURE_SOUNDS[sound_id][phrase_id]);
+        char path[FILE_NAME_MAX];
+        snprintf(path, FILE_NAME_MAX, "wavs/%s", FIGURE_SOUNDS[sound_id][phrase_id]);
         sound_speech_play_file(path);
     }
 }
@@ -329,12 +329,7 @@ static int market_supplier_phrase(figure *f)
     if (f->action_state == FIGURE_ACTION_145_SUPPLIER_GOING_TO_STORAGE) {
         return 7;
     } else if (f->action_state == FIGURE_ACTION_146_SUPPLIER_RETURNING) {
-        int resource;
-        if (f->type == FIGURE_LIGHTHOUSE_SUPPLIER) {
-            resource = f->collecting_item_id;
-        } else {
-            resource = resource_from_inventory(f->collecting_item_id);
-        }
+        resource_type resource = f->collecting_item_id;
         if (resource != RESOURCE_NONE) {
             return 8;
         } else {
@@ -364,7 +359,8 @@ static int cart_pusher_phrase(figure *f)
     return -1;
 }
 
-static int mess_hall_supplier_phrase(figure* f) {
+static int mess_hall_supplier_phrase(figure *f)
+{
     return 0;
 }
 
@@ -423,7 +419,7 @@ static int citizen_phrase(figure *f)
     return 7 + f->phrase_sequence_exact;
 }
 
-static int missionary_phrase(figure* f)
+static int missionary_phrase(figure *f)
 {
     if (++f->phrase_sequence_exact >= 4) {
         f->phrase_sequence_exact = 0;
@@ -431,7 +427,7 @@ static int missionary_phrase(figure* f)
     return 7 + f->phrase_sequence_exact;
 }
 
-static int homeless_phrase(figure* f)
+static int homeless_phrase(figure *f)
 {
     if (++f->phrase_sequence_exact >= 2) {
         f->phrase_sequence_exact = 0;
@@ -608,6 +604,14 @@ static int barkeep_phrase(figure *f)
     }
 }
 
+static int beggar_phrase(figure *f)
+{
+    if (++f->phrase_sequence_exact >= 2) {
+        f->phrase_sequence_exact = 0;
+    }
+    return 7 + f->phrase_sequence_exact;
+}
+
 static int phrase_based_on_figure_state(figure *f)
 {
     switch (f->type) {
@@ -653,6 +657,8 @@ static int phrase_based_on_figure_state(figure *f)
         case FIGURE_FORT_JAVELIN:
         case FIGURE_FORT_MOUNTED:
         case FIGURE_FORT_LEGIONARY:
+        case FIGURE_FORT_INFANTRY:
+        case FIGURE_FORT_ARCHER:
             return soldier_phrase();
         case FIGURE_DOCKER:
             return docker_phrase(f);
@@ -668,6 +674,8 @@ static int phrase_based_on_figure_state(figure *f)
             return f->type == FIGURE_TRADE_CARAVAN ? trade_caravan_phrase(f) : -1;
         case FIGURE_TRADE_SHIP:
             return trade_ship_phrase(f);
+        case FIGURE_BEGGAR:
+            return beggar_phrase(f);
     }
     return -1;
 }

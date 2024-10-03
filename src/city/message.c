@@ -1,11 +1,15 @@
 #include "message.h"
 
+#include "city/warning.h"
+#include "core/config.h"
 #include "core/encoding.h"
 #include "core/file.h"
 #include "core/lang.h"
 #include "core/string.h"
 #include "core/time.h"
 #include "figure/formation.h"
+#include "game/resource.h"
+#include "game/settings.h"
 #include "game/time.h"
 #include "graphics/window.h"
 #include "sound/effect.h"
@@ -134,18 +138,36 @@ static void play_sound(int text_id)
     }
 }
 
+static int is_invasion_message(int message_type)
+{
+    switch (message_type) {
+        case MESSAGE_LOCAL_UPRISING:
+        case MESSAGE_BARBARIAN_ATTACK:
+        case MESSAGE_CAESAR_ARMY_ATTACK:
+        case MESSAGE_LOCAL_UPRISING_MARS:
+        case MESSAGE_ENEMY_ARMY_ATTACK:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
 static void show_message_popup(int message_id)
 {
     city_message *msg = &data.messages[message_id];
     data.consecutive_message_delay = 5;
     msg->is_read = 1;
-    int text_id = city_message_get_text_id(msg->message_type);
-    if (!has_video(text_id)) {
-        play_sound(text_id);
+    if (msg->message_type != MESSAGE_CUSTOM_MESSAGE) {
+        int text_id = city_message_get_text_id(msg->message_type);
+        if (!has_video(text_id)) {
+            play_sound(text_id);
+        }
+        window_message_dialog_show_city_message(text_id,
+            msg->year, msg->month, msg->param1, msg->param2,
+            city_message_get_advisor(msg->message_type), 1);
+    } else {
+        window_message_dialog_show_custom_message(msg->param1, msg->year, msg->month);
     }
-    window_message_dialog_show_city_message(text_id,
-        msg->year, msg->month, msg->param1, msg->param2,
-        city_message_get_advisor(msg->message_type), 1);
 }
 
 void city_message_disable_sound_for_next_message(void)
@@ -179,13 +201,23 @@ void city_message_post(int use_popup, int message_type, int param1, int param2)
     msg->month = game_time_month();
     msg->param1 = param1;
     msg->param2 = param2;
-    msg->sequence = data.next_message_sequence++;
+    msg->sequence = ++data.next_message_sequence;
 
     int text_id = city_message_get_text_id(message_type);
     lang_message_type lang_msg_type = lang_get_message(text_id)->message_type;
     if (lang_msg_type == MESSAGE_TYPE_DISASTER || lang_msg_type == MESSAGE_TYPE_INVASION) {
         data.problem_count = 1;
         window_invalidate();
+    }
+
+    // Since custom messages are scenario specific, don't show them as simple alerts at the top
+    // Also, beware: should we change this behavior, the below code will crash
+    if (message_type != MESSAGE_CUSTOM_MESSAGE && config_get(CONFIG_UI_MESSAGE_ALERTS)) {
+        city_warning_show_custom(lang_get_message(text_id)->title.text, NEW_WARNING_SLOT);
+        use_popup = 0;
+    }
+    if (is_invasion_message(msg->message_type) && setting_game_speed() > 70) {
+        setting_set_default_game_speed();
     }
     if (use_popup && window_is(WINDOW_CITY)) {
         show_message_popup(id);
@@ -304,10 +336,23 @@ message_advisor city_message_get_advisor(city_message_type message_type)
         case MESSAGE_LOCAL_UPRISING:
         case MESSAGE_BARBARIAN_ATTACK:
         case MESSAGE_CAESAR_ARMY_ATTACK:
+        case MESSAGE_CAESAR_ARMY_CONTINUE:
+        case MESSAGE_CAESAR_ARMY_RETREAT:
         case MESSAGE_ENEMY_ARMY_ATTACK:
         case MESSAGE_DISTANT_BATTLE:
         case MESSAGE_ENEMIES_CLOSING:
         case MESSAGE_ENEMIES_AT_THE_DOOR:
+        case MESSAGE_TROOPS_RETURN_VICTORIOUS:
+        case MESSAGE_TROOPS_RETURN_FAILED:
+        case MESSAGE_DISTANT_BATTLE_LOST_NO_TROOPS:
+        case MESSAGE_DISTANT_BATTLE_LOST_TOO_LATE:
+        case MESSAGE_DISTANT_BATTLE_LOST_TOO_WEAK:
+        case MESSAGE_DISTANT_BATTLE_CITY_RETAKEN:
+        case MESSAGE_SPIRIT_OF_MARS:
+        case MESSAGE_SOLDIERS_STARVING:
+        case MESSAGE_SOLDIERS_STARVING_NO_MESS_HALL:
+        case MESSAGE_GLADIATOR_REVOLT:
+        case MESSAGE_GLADIATOR_REVOLT_FINISHED:
             return MESSAGE_ADVISOR_MILITARY;
 
         case MESSAGE_CAESAR_REQUESTS_GOODS:
@@ -319,6 +364,12 @@ message_advisor city_message_get_advisor(city_message_type message_type)
         case MESSAGE_REQUEST_REFUSED_OVERDUE:
         case MESSAGE_REQUEST_RECEIVED_LATE:
         case MESSAGE_REQUEST_CAN_COMPLY:
+        case MESSAGE_EMPEROR_CHANGE:
+        case MESSAGE_CAESAR_WRATH:
+        case MESSAGE_CAESAR_RESPECT_1:
+        case MESSAGE_CAESAR_RESPECT_2:
+        case MESSAGE_CAESAR_RESPECT_3:
+        case MESSAGE_CAESAR_ANGER:
             return MESSAGE_ADVISOR_IMPERIAL;
 
         case MESSAGE_UNEMPLOYMENT:
@@ -329,16 +380,102 @@ message_advisor city_message_get_advisor(city_message_type message_type)
 
         case MESSAGE_NOT_ENOUGH_FOOD:
         case MESSAGE_FOOD_NOT_DELIVERED:
+        case MESSAGE_POPULATION_500:
+        case MESSAGE_POPULATION_1000:
+        case MESSAGE_POPULATION_2000:
+        case MESSAGE_POPULATION_3000:
+        case MESSAGE_POPULATION_5000:
+        case MESSAGE_POPULATION_10000:
+        case MESSAGE_POPULATION_15000:
+        case MESSAGE_POPULATION_20000:
+        case MESSAGE_POPULATION_25000:
             return MESSAGE_ADVISOR_POPULATION;
 
         case MESSAGE_HEALTH_ILLNESS:
         case MESSAGE_HEALTH_DISEASE:
         case MESSAGE_HEALTH_PESTILENCE:
+        case MESSAGE_SICKNESS:
+        case MESSAGE_CONTAMINATED_WATER:
             return MESSAGE_ADVISOR_HEALTH;
 
         case MESSAGE_GODS_UNHAPPY:
         case MESSAGE_GODS_WRATHFUL:
+        case MESSAGE_AUTO_FESTIVAL_CERES:
+        case MESSAGE_AUTO_FESTIVAL_NEPTUNE:
+        case MESSAGE_AUTO_FESTIVAL_MARS:
+        case MESSAGE_AUTO_FESTIVAL_MERCURY:
+        case MESSAGE_AUTO_FESTIVAL_VENUS:
+        case MESSAGE_GRAND_FESTIVAL:
+        case MESSAGE_LARGE_FESTIVAL:
+        case MESSAGE_SMALL_FESTIVAL:
+        case MESSAGE_BLESSING_FROM_CERES:
+        case MESSAGE_BLESSING_FROM_MARS:
+        case MESSAGE_BLESSING_FROM_MERCURY:
+        case MESSAGE_BLESSING_FROM_MERCURY_ALTERNATE:
+        case MESSAGE_BLESSING_FROM_NEPTUNE:
+        case MESSAGE_BLESSING_FROM_NEPTUNE_ALTERNATE:
+        case MESSAGE_BLESSING_FROM_VENUS:
+        case MESSAGE_BLESSING_FROM_VENUS_ALTERNATE:
+        case MESSAGE_CERES_IS_UPSET:
+        case MESSAGE_MARS_IS_UPSET:
+        case MESSAGE_MERCURY_IS_UPSET:
+        case MESSAGE_NEPTUNE_IS_UPSET:
+        case MESSAGE_VENUS_IS_UPSET:
+        case MESSAGE_WRATH_OF_CERES:
+        case MESSAGE_WRATH_OF_MARS:
+        case MESSAGE_WRATH_OF_MARS_NO_MILITARY:
+        case MESSAGE_WRATH_OF_MERCURY:
+        case MESSAGE_WRATH_OF_NEPTUNE:
+        case MESSAGE_WRATH_OF_NEPTUNE_NO_SEA_TRADE:
+        case MESSAGE_WRATH_OF_VENUS:
+        case MESSAGE_LOCAL_UPRISING_MARS:
+        case MESSAGE_GRAND_TEMPLE_COMPLETE:
+        case MESSAGE_PANTHEON_COMPLETE:
+        case MESSAGE_WRATH_OF_MARS_NO_NATIVES:
             return MESSAGE_ADVISOR_RELIGION;
+
+        case MESSAGE_INCREASED_TRADING:
+        case MESSAGE_DECREASED_TRADING:
+        case MESSAGE_PRICE_DECREASED:
+        case MESSAGE_PRICE_INCREASED:
+        case MESSAGE_TRADE_STOPPED:
+        case MESSAGE_LAND_TRADE_DISRUPTED_LANDSLIDES:
+        case MESSAGE_LAND_TRADE_DISRUPTED_SANDSTORMS:
+        case MESSAGE_SEA_TRADE_DISRUPTED:
+            return MESSAGE_ADVISOR_TRADE;
+
+        case MESSAGE_PEOPLE_DISGRUNTLED:
+        case MESSAGE_PEOPLE_UNHAPPY:
+        case MESSAGE_PEOPLE_ANGRY:
+        case MESSAGE_RIOT:
+        case MESSAGE_EMIGRATION:
+        case MESSAGE_LOOTING:
+        case MESSAGE_THEFT:
+            return MESSAGE_ADVISOR_CHIEF;
+            
+        case MESSAGE_CITY_IN_DEBT:
+        case MESSAGE_CITY_IN_DEBT_AGAIN:
+        case MESSAGE_CITY_STILL_IN_DEBT:
+            return MESSAGE_ADVISOR_FINANCIAL;
+
+        case MESSAGE_WORKING_COLOSSEUM:
+        case MESSAGE_WORKING_HIPPODROME:
+        case MESSAGE_AN_GAMES_PLANNED:
+        case MESSAGE_IG_GAMES_PLANNED:
+        case MESSAGE_KI_GAMES_PLANNED:
+        case MESSAGE_NG_GAMES_PLANNED:
+        case MESSAGE_OL_GAMES_PLANNED:
+        case MESSAGE_AN_GAMES_START:
+        case MESSAGE_IG_GAMES_START:
+        case MESSAGE_KI_GAMES_START:
+        case MESSAGE_NG_GAMES_START:
+        case MESSAGE_OL_GAMES_START:
+        case MESSAGE_AN_GAMES_END:
+        case MESSAGE_IG_GAMES_END:
+        case MESSAGE_KI_GAMES_END:
+        case MESSAGE_NG_GAMES_END:
+        case MESSAGE_OL_GAMES_END:
+            return MESSAGE_ADVISOR_ENTERTAINMENT;
 
         default:
             return MESSAGE_ADVISOR_NONE;
@@ -543,6 +680,21 @@ void city_message_save_state(buffer *messages, buffer *extra, buffer *counts, bu
     buffer_write_u8(population, data.population_shown.pop25000);
 }
 
+static void update_message_param_if_resource(city_message *msg)
+{
+    switch (msg->message_type) {
+        case MESSAGE_INCREASED_TRADING:
+        case MESSAGE_DECREASED_TRADING:
+        case MESSAGE_TRADE_STOPPED:
+        case MESSAGE_PRICE_INCREASED:
+        case MESSAGE_PRICE_DECREASED:
+            msg->param2 = resource_remap(msg->param2);
+            break;
+        default:
+            break;
+    }
+}
+
 void city_message_load_state(buffer *messages, buffer *extra, buffer *counts, buffer *delays, buffer *population)
 {
     for (int i = 0; i < MAX_MESSAGES; i++) {
@@ -554,6 +706,7 @@ void city_message_load_state(buffer *messages, buffer *extra, buffer *counts, bu
         msg->sequence = buffer_read_i16(messages);
         msg->is_read = buffer_read_u8(messages);
         msg->month = buffer_read_u8(messages);
+        update_message_param_if_resource(msg);
         buffer_skip(messages, 2);
     }
 

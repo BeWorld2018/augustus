@@ -10,11 +10,12 @@ typedef struct {
     int y;
 } pixel_coordinate;
 
+void set_city_clip_rectangle(void);
 void widget_city_draw(void);
 void widget_city_draw_for_figure(int figure_id, pixel_coordinate *coord);
 
-int widget_city_draw_construction_cost_and_size(void);
-void widget_city_draw_touch_buttons(void);
+void widget_city_draw_construction_cost_and_size(void);
+void widget_city_draw_construction_buttons(void);
 
 int widget_city_has_input(void);
 void widget_city_handle_input(const mouse *m, const hotkeys *h);
@@ -24,6 +25,10 @@ void widget_city_get_tooltip(tooltip_context *c);
 
 void widget_city_clear_current_tile(void);
 
+void widget_city_clear_routing_grid_offset(void);
+
 int widget_city_current_grid_offset(void);
+
+void widget_city_setup_routing_preview(void);
 
 #endif // WIDGET_CITY_H
