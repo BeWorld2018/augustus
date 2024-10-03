@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(__SWITCH__)
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !defined(__SWITCH__) && !defined(__MORPHOS__)
 static int is_container(void)
 {
     return getenv("container") || getenv("APPIMAGE") || getenv("SNAP");
@@ -17,7 +17,7 @@ static int is_container(void)
 
 const char *platform_user_path_recommend(void)
 {
-#if defined(__EMSCRIPTEN__) || defined(__ANDROID__) || defined(__SWITCH__)
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__) || defined(__SWITCH__) || defined(__MORPHOS__)
     return 0;
 #else
     if (is_container()) {

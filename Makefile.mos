@@ -1,17 +1,17 @@
 # Project: augustus
 
-CC 			= ppc-morphos-gcc-10
+CC 			= ppc-morphos-gcc-9
 STRIP 		= ppc-morphos-strip
 BIN 		= augustus
 RM 			= rm -f
 AMIGADATE 	= $(shell date +"%-d.%-m.%Y")
 OS      	:= $(shell uname)
 
-LIBS 		= -L/usr/local/lib  -lSDL2_mixer -lSDL2  -noixemul -lc -lm
+LIBS 		= -L/usr/local/lib  -lSDL2_mixer -lSDL2 -lGL -noixemul -lc -lm
 INCLUDES  	= -I./ext/zlib -I./ext/expat -I./ext/png  -I/usr/local/include/SDL2 -I./src -I./ext  
 DEFS		= -DDRAW_FPS -D__AMIGADATE__=\"$(AMIGADATE)\"  -DCUSTOM_ASSETS_DIR=\"PROGDIR:\"
 CFLAGS 		= -O2 -noixemul -Wall -std=gnu99 -Werror=incompatible-pointer-types -Werror=int-conversion -Wstrict-prototypes -ffast-math $(INCLUDES) $(DEFS)
-
+# -DDRAW_ROUTING -DDRAW_HIGHWAY_TERRAIN -DDRAW_TILE_COORDS -DDRAW_ROAD_NETWORK_IDS
 
 OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/platform/arguments.o \
@@ -27,8 +27,10 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/platform/mouse.o \
 	src/platform/platform.o \
 	src/platform/prefs.o \
+	src/platform/renderer.o \
 	src/platform/sound_device.o \
 	src/platform/touch.o \
+	src/platform/user_path.o \
 	src/platform/version.o \
 	src/platform/virtual_keyboard.o \
 	src/platform/screen.o \
@@ -38,15 +40,18 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/core/config.o \
 	src/core/dir.o \
 	src/core/encoding.o \
+	src/core/encoding_japanese.o \
 	src/core/encoding_korean.o \
 	src/core/encoding_simp_chinese.o \
 	src/core/encoding_trad_chinese.o \
 	src/core/file.o \
 	src/core/hotkey_config.o \
 	src/core/image.o \
+	src/core/image_packer.o \
 	src/core/io.o \
 	src/core/lang.o \
 	src/core/locale.o \
+	src/core/memory_block.o \
 	src/core/png_read.o \
 	src/core/random.o \
 	src/core/smacker.o \
@@ -54,11 +59,13 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/core/string.o \
 	src/core/time.o \
 	src/core/zip.o \
+	src/core/xml_parser.o \
+    src/core/xml_exporter.o \
+    src/core/zlib_helper.o \
 	src/building/animation.o \
+	src/building/armoury.o \
 	src/building/barracks.o \
 	src/building/building.o \
-	src/building/building_state.o \
-	src/building/building_variant.o \
     src/building/caravanserai.o \
 	src/building/clone.o \
 	src/building/connectable.o \
@@ -72,6 +79,7 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/building/destruction.o \
 	src/building/distribution.o \
 	src/building/dock.o \
+	src/building/entertainment.o \
 	src/building/figure.o \
 	src/building/government.o \
 	src/building/granary.o \
@@ -92,10 +100,17 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/building/properties.o \
 	src/building/roadblock.o \
 	src/building/rotation.o \
+	src/building/state.o \
 	src/building/storage.o \
 	src/building/tavern.o \
     src/building/temple.o \
 	src/building/warehouse.o \
+	src/building/variant.o \
+	src/campaign/campaign.o \
+    src/campaign/file.o \
+    src/campaign/mission.o \
+    src/campaign/player_data.o \
+    src/campaign/xml.o \
 	src/city/buildings.o \
 	src/city/culture.o \
 	src/city/data.o \
@@ -132,6 +147,7 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/empire/object.o \
 	src/empire/trade_prices.o \
 	src/empire/trade_route.o \
+	src/empire/xml.o \
 	src/figure/action.o \
 	src/figure/combat.o \
 	src/figure/enemy_army.o \
@@ -147,9 +163,11 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/figure/phrase.o \
 	src/figure/properties.o \
 	src/figure/route.o \
+	src/figure/roamer_preview.o \
 	src/figure/service.o \
 	src/figure/sound.o \
 	src/figure/trader.o \
+	src/figure/visited_buildings.o \
 	src/figuretype/animal.o \
 	src/figuretype/cartpusher.o \
 	src/figuretype/crime.o \
@@ -157,6 +175,7 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/figuretype/editor.o \
 	src/figuretype/enemy.o \
 	src/figuretype/entertainer.o \
+	src/figuretype/depot.o \
 	src/figuretype/maintenance.o \
 	src/figuretype/migrant.o \
 	src/figuretype/missile.o \
@@ -227,6 +246,10 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/map/water_supply.o \
 	src/scenario/building.o \
 	src/scenario/criteria.o \
+	src/scenario/custom_media.o \
+    src/scenario/custom_messages_export_xml.o \
+    src/scenario/custom_messages_import_xml.o \
+    src/scenario/custom_messages.o \
 	src/scenario/demand_change.o \
 	src/scenario/distant_battle.o \
 	src/scenario/earthquake.o \
@@ -238,22 +261,37 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/scenario/gladiator_revolt.o \
 	src/scenario/invasion.o \
 	src/scenario/map.o \
+	src/scenario/message_media_text_blob.o \
 	src/scenario/price_change.o \
 	src/scenario/property.o \
 	src/scenario/random_event.o \
 	src/scenario/request.o \
 	src/scenario/scenario.o \
+	src/scenario/scenario_event.o \
+    src/scenario/scenario_events_import_xml.o \
+    src/scenario/scenario_events_export_xml.o \
+    src/scenario/scenario_events_controller.o \
+    src/scenario/scenario_events_parameter_data.o \
+    src/scenario/action_types/action_handler.o \
+    src/scenario/action_types/action_types.o \
+    src/scenario/condition_types/comparison_helper.o \
+    src/scenario/condition_types/condition_handler.o \
+    src/scenario/condition_types/condition_types.o \
 	src/graphics/arrow_button.o \
 	src/graphics/button.o \
+	src/graphics/clouds.o \
 	src/graphics/font.o \
 	src/graphics/generic_button.o \
 	src/graphics/graphics.o \
+	src/graphics/grid_box.o \
 	src/graphics/image.o \
 	src/graphics/image_button.o \
 	src/graphics/lang_text.o \
+	src/graphics/list_box.o \
 	src/graphics/menu.o \
 	src/graphics/panel.o \
 	src/graphics/rich_text.o \
+	src/graphics/renderer.o \
 	src/graphics/screen.o \
 	src/graphics/screenshot.o \
 	src/graphics/scrollbar.o \
@@ -270,12 +308,14 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/widget/city.o \
 	src/widget/city_bridge.o \
 	src/widget/city_building_ghost.o \
+	src/widget/city_draw_highway.o \
 	src/widget/city_figure.o \
 	src/widget/city_overlay_education.o \
 	src/widget/city_overlay_entertainment.o \
 	src/widget/city_overlay_health.o \
 	src/widget/city_overlay_other.o \
 	src/widget/city_overlay_risks.o \
+	src/widget/city_water_ghost.o \
 	src/widget/city_pause_menu.o \
 	src/widget/city_with_overlay.o \
 	src/widget/city_without_overlay.o \
@@ -284,7 +324,6 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/widget/map_editor_tool.o \
 	src/widget/map_editor_pause_menu.o \
 	src/widget/minimap.o \
-	src/widget/scenario_minimap.o \
 	src/widget/top_menu.o \
 	src/widget/top_menu_editor.o \
 	src/widget/sidebar/city.o \
@@ -307,10 +346,12 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/window/advisor/ratings.o \
 	src/window/advisor/religion.o \
 	src/window/advisor/trade.o \
+	src/window/asset_previewer.o \
 	src/window/build_menu.o \
 	src/window/building_info.o \
 	src/window/building/common.o \
 	src/window/building/culture.o \
+	src/window/building/depot.o \
 	src/window/building/distribution.o \
 	src/window/building/figures.o \
 	src/window/building/government.o \
@@ -322,6 +363,8 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/window/editor/allowed_buildings.o \
 	src/window/editor/attributes.o \
 	src/window/editor/build_menu.o \
+	src/window/editor/custom_messages.o \
+    src/window/editor/custom_variables.o \
 	src/window/editor/demand_changes.o \
 	src/window/editor/edit_demand_change.o \
 	src/window/editor/edit_invasion.o \
@@ -332,6 +375,16 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/window/editor/map.o \
 	src/window/editor/price_changes.o \
 	src/window/editor/requests.o \
+	src/window/editor/scenario_events.o \
+    src/window/editor/scenario_event_details.o \
+    src/window/editor/scenario_action_edit.o \
+    src/window/editor/scenario_condition_edit.o \
+    src/window/editor/select_city_by_type.o \
+    src/window/editor/select_city_trade_route.o \
+    src/window/editor/select_custom_message.o \
+    src/window/editor/select_scenario_action_type.o \
+    src/window/editor/select_scenario_condition_type.o \
+    src/window/editor/select_special_attribute_mapping.o \
 	src/window/editor/special_events.o \
 	src/window/editor/start_year.o \
 	src/window/editor/starting_conditions.o \
@@ -358,8 +411,9 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/window/military_menu.o \
 	src/window/mission_briefing.o \
 	src/window/mission_end.o \
+	src/window/mission_list.o \
 	src/window/mission_selection.o \
-	src/window/new_career.o \
+	src/window/new_campaign.o \
 	src/window/numeric_input.o \
 	src/window/option_popup.o \
 	src/window/overlay_menu.o \
@@ -369,17 +423,22 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/window/resource_settings.o \
 	src/window/select_list.o \
 	src/window/set_salary.o \
+	src/window/text_input.o \
 	src/window/trade_opened.o \
 	src/window/trade_prices.o \
+	src/window/user_path_setup.o \
 	src/window/victory_dialog.o \
-	src/window/victory_video.o \
+	src/window/video.o \
 	src/editor/editor.o \
 	src/editor/tool.o \
 	src/editor/tool_restriction.o \
+	src/translation/czech.o \
 	src/translation/english.o \
 	src/translation/french.o \
 	src/translation/german.o \
+	src/translation/greek.o \
 	src/translation/italian.o \
+	src/translation/japanese.o \
 	src/translation/korean.o \
 	src/translation/polish.o \
 	src/translation/portuguese.o \
@@ -395,11 +454,7 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/assets/assets.o \
 	src/assets/xml.o 
    
-OBJLIB = 	ext/png/png.o ext/png/pngread.o ext/png/pngerror.o ext/png/pngget.o ext/png/pngmem.o ext/png/pngpread.o \
-			ext/png/pngrio.o ext/png/pngrtran.o ext/png/pngrutil.o ext/png/pngset.o ext/png/pngtrans.o ext/png/pngwio.o \
-			ext/png/pngwrite.o ext/png/pngwtran.o ext/png/pngwutil.o ext/expat/xmlparse.o ext/expat/xmlrole.o \
-			ext/expat/xmltok.o 	ext/zlib/adler32.o ext/zlib/crc32.o ext/zlib/deflate.o ext/zlib/inffast.o \
-			ext/zlib/inflate.o ext/zlib/inftrees.o ext/zlib/trees.o ext/zlib/zutil.o 
+OBJLIB = ext/tinyfiledialogs/tinyfiledialogs.o ext/spng/spng.o ext/sxml/sxml.o ext/zip/zip.o
  
 OBJ += $(OBJLIB)
  

@@ -132,7 +132,10 @@ static const char *get_case_corrected_file(const char *dir, const char *filepath
 #ifndef __MORPHOS__
         dir = ".";
         dir_skip = 2;
-#endif
+#else
+		dir = "";	
+		dir_skip = 0;
+#endif	
     }
     dir_len = strlen(dir);
     snprintf(corrected_filename, 2 * FILE_NAME_MAX, "%s", dir);
