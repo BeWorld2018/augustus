@@ -13,7 +13,7 @@ DEFS		= -DDRAW_FPS -D__AMIGADATE__=\"$(AMIGADATE)\"  -DCUSTOM_ASSETS_DIR=\"PROGD
 CFLAGS 		= -O2 -noixemul -Wall -std=gnu99 -Werror=incompatible-pointer-types -Werror=int-conversion -Wstrict-prototypes -ffast-math $(INCLUDES) $(DEFS)
 # -DDRAW_ROUTING -DDRAW_HIGHWAY_TERRAIN -DDRAW_TILE_COORDS -DDRAW_ROAD_NETWORK_IDS
 
-OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
+OBJ = \
 	src/platform/arguments.o \
 	src/platform/crash_handler.o \
 	src/platform/file_manager.o \
@@ -452,8 +452,8 @@ OBJ = 	ext/tinyfiledialogs/tinyfiledialogs.o \
 	src/assets/image.o \
 	src/assets/layer.o \
 	src/assets/assets.o \
-	src/assets/xml.o 
-   
+	src/assets/xml.o
+	
 OBJLIB = ext/tinyfiledialogs/tinyfiledialogs.o ext/spng/spng.o ext/sxml/sxml.o ext/zip/zip.o
  
 OBJ += $(OBJLIB)
@@ -461,7 +461,7 @@ OBJ += $(OBJLIB)
 all: $(BIN)
 
 $(BIN): $(OBJ)
-	$(CC) $(OBJ) -o $@ $< $(LIBS) -Wl,-Map=augustus.map
+	$(CC) $(OBJ) $(LIBS) -o $@
 	$(STRIP) --strip-all $(BIN)
 
 %.o: %.c

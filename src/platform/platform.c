@@ -96,7 +96,7 @@ const char *system_OS(void)
     #if TARGET_OS_MAC
         return "Mac OS X";
     #endif
-#elif defined(__GNUC__) && !defined(__SWITCH__)
+#elif defined(__GNUC__) && !defined(__SWITCH__) && !defined(__MORPHOS__)
     struct utsname uts;
     if (uname(&uts) == 0) {
         static char full_version[300];
@@ -115,6 +115,8 @@ const char *system_OS(void)
     return "NetBSD";
 #elif defined(__OpenBSD__)
     return "OpenBSD";
+#elif defined(__MORPHOS__)
+	return "MorphOS";
 #elif defined(__vita__)
     return "PlayStation Vita";
 #elif defined(__SWITCH__)

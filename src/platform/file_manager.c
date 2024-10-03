@@ -99,7 +99,7 @@ static void copy_file_times(FILE *src, FILE *dst)
 typedef struct stat stat_info;
 typedef char file_name;
 
-#ifdef __SWITCH__
+#if defined(__SWITCH__) || defined(__MORPHOS__)
 static void copy_file_times(const char *src, const char *dst)
 {
     stat_info file_info;
@@ -143,6 +143,8 @@ static void copy_file_times(FILE *src, FILE *dst)
 #define CURRENT_DIR "PROGDIR:"
 #define set_dir_name(n) (n)
 #define free_dir_name(n)
+#define set_file_name(n) (n)
+#define free_file_name(n)
 #else
 #define CURRENT_DIR "."
 #define set_file_name(n) (n)
@@ -215,7 +217,7 @@ static int write_base_path_to(char *dest)
     if (!base_path) {
         return 0;
     }
-    snprintf(dest, FILE_NAME_MAX, "%s", base_path);
+    snprintf(dest, FILE_NAME_MAX, "%s/", base_path);
     SDL_free(base_path);
     return 1;
 #else
@@ -278,7 +280,7 @@ static void set_assets_directory(void)
             }
             // Special case - Path relative to executable location (AppImage)
         } else if (strcmp(ASSET_DIRS[i], "***RELATIVE_APPIMG_PATH***") == 0) {
-#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__) || defined(__MORPHOS__)
             log_error("***RELATIVE_APPIMG_PATH*** is not available on your platform.", 0, 0);
             continue;
 #else
@@ -292,7 +294,7 @@ static void set_assets_directory(void)
             snprintf(parent, FILE_NAME_MAX - (parent - assets_directory), "/share/augustus-game");
 #endif
         } else if (strcmp(ASSET_DIRS[i], "***EXEC_PATH***") == 0) {
-#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__) || defined(__MORPHOS__)
             log_error("***EXEC_PATH*** is not available on your platform.", 0, 0);
             continue;
 #else
@@ -308,7 +310,7 @@ static void set_assets_directory(void)
             snprintf(assets_directory, FILE_NAME_MAX, "%s", arg0_dir);
 #endif
         } else if (strcmp(ASSET_DIRS[i], "***RELATIVE_EXEC_PATH***") == 0) {
-#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__)
+#if defined(_WIN32) || defined(__vita__) || defined(__SWITCH__) || defined(__APPLE__) || defined(__MORPHOS__)
             log_error("***RELATIVE_EXEC_PATH*** is not available on your platform.", 0, 0);
             continue;
 #else
@@ -801,13 +803,13 @@ int platform_file_manager_copy_file(const char *src, const char *dst)
         fclose(in);
         return 1;
     }
-#ifndef __SWITCH__
+#if !defined( __SWITCH__) && !defined(__MORPHOS__)
     copy_file_times(in, out);
 #endif
     file_close(in);
     file_close(out);
 
-#ifdef __SWITCH__
+#if !defined( __SWITCH__) && !defined(__MORPHOS__)
     copy_file_times(src, dst);
 #endif
 
